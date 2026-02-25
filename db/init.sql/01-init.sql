@@ -1,0 +1,3 @@
+-- Le script s'exécute dans la DB postgres
+-- La base 'hypertube' sera créée automatiquement via POSTGRES_DB
+-- Les tables seront créées par SQLAlchemy au démarrage de l'app
