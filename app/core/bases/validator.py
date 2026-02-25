@@ -4,7 +4,8 @@ Base Validator - Abstract class for all validators
 import re
 from abc import ABC
 from typing import Any
-from app.core.errors import (APIError, ERROR_MESSAGES)
+from app.core.errors.handlers import APIError
+from app.core.errors.messages import ERROR_MESSAGES
 
 
 class BaseValidator(ABC):

@@ -1,28 +1,28 @@
-"""
-Videos Domain - Unified video content management (movies and TV shows)
+# """
+# Videos Domain - Unified video content management (movies and TV shows)
 
-This module provides:
-- Abstract Video model with polymorphic inheritance
-- Service layer with Celery integration for downloads
-- DAO layer for database operations
-"""
-from services.video.models import (
-    Video,
-    ContentType,
-    DownloadStatus
-)
-from services.video.dao import VideoDAO
-from services.video.service import VideoService
-from services.video.tv_show.service import TVShowService
-from services.video.movie.service import MovieService
+# This module provides:
+# - Abstract Video model with polymorphic inheritance
+# - Service layer with Celery integration for downloads
+# - DAO layer for database operations
+# """
+# from services.video.models import (
+#     Video,
+#     ContentType,
+#     DownloadStatus
+# )
+# from services.video.dao import VideoDAO
+# from services.video.service import VideoService
+# from services.video.tv_show.service import TVShowService
+# from services.video.movie.service import MovieService
 
 
-__all__ = [
-    "Video",
-    "VideoDAO",
-    "ContentType", 
-    "DownloadStatus",
-    "VideoService",
-    "MovieService",
-    "TVShowService",
-]
+# __all__ = [
+#     "Video",
+#     "VideoDAO",
+#     "ContentType", 
+#     "DownloadStatus",
+#     "VideoService",
+#     "MovieService",
+#     "TVShowService",
+# ]

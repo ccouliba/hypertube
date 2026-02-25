@@ -6,11 +6,11 @@ Provides:
 - Auth decorators for protected endpoints
 - User models and validators
 """
-from app.services.auth.dao import UserDAO
-from app.services.auth.models import User
-from app.services.auth.service import AuthService
-from app.services.auth.validators import UserValidator
-from app.services.auth.settings import auth_settings
+from services.auth.dao import UserDAO
+from services.auth.models import User
+from services.auth.service import AuthService
+from services.auth.validators import UserValidator
+from services.auth.settings import auth_settings
 
 __all__ = [
     "User",

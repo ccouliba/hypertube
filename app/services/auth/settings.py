@@ -1,6 +1,6 @@
 """Authentication service settings"""
-from app.core.configs import APP_CONFIG as app_config
-from app.core.configs import AUTH_CONFIG as auth_config
+from app.core.configs.general import G_CONFIG as app_config
+from app.core.configs.auth import AUTH_CONFIG as auth_config
 
 auth_settings: dict[str, any] = {
     """Auth service settings dictionary"""
