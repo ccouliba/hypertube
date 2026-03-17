@@ -129,8 +129,16 @@ def extract_tv_title(torrent_name: str) -> str:
 def _enrich_one(index_result: tuple[int, dict]) -> tuple[int, dict]:
     """Enrich a single result with TMDb metadata (called in parallel)"""
     i, result = index_result
-    if result.get("thumbnail") and result.get("large_cover"):
+    # if result.get("thumbnail") and result.get("large_cover"):
+    #     return i, result
+    def _is_valid_image_url(value: Optional[str]) -> bool:
+        return isinstance(value, str) and value.startswith(("http://", "https://"))
+
+    has_valid_thumbnail = _is_valid_image_url(result.get("thumbnail"))
+    has_valid_large_cover = _is_valid_image_url(result.get("large_cover"))
+    if has_valid_thumbnail and has_valid_large_cover:
         return i, result
+    
     provider: Optional[str] = result.get("provider")
     title: Optional[str] = result.get("title")
     if not title:
