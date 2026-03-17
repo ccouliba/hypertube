@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/
 
-WORKDIR /app
+WORKDIR /
 
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -11,18 +11,19 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     libpq-dev \
     libssl-dev \
-    libboost-all-dev
+    libboost-all-dev \
+    ffmpeg
     
-COPY celery/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app/requirements.txt app_requirements.txt
-RUN pip install --no-cache-dir -r app_requirements.txt
+COPY celery/requirements.txt /tmp/celery_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/celery_requirements.txt
+COPY app/requirements.txt /tmp/app_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/app_requirements.txt
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir celery[redis]
-COPY . /app
+COPY app /app
 RUN addgroup --system hypertube && adduser --system --ingroup hypertube appuser \
     && chown -R appuser:hypertube /app
 USER appuser
 EXPOSE 5555
 
-CMD ["celery", "-A", "app.tasks.celery:celery_app", "worker", "--beat", "--loglevel=info"]
+CMD ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "--beat", "--loglevel=info", "--schedule", "/tmp/celerybeat-schedule"]

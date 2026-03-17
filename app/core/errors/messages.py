@@ -1,6 +1,7 @@
 ERROR_MESSAGES: dict[str, str] = {
     
     # Authentication errors
+    "UNAUTHORIZED": "Unauthorized",
     "INVALID_CREDENTIALS": "Invalid username or password",
     "USERNAME_EXISTS": "Username already exists",
     "EMAIL_EXISTS": "Email already exists",
@@ -33,4 +34,12 @@ ERROR_MESSAGES: dict[str, str] = {
     
     # Movie errors
     "MOVIE_NOT_FOUND": "Movie not found",
+
+    # Video errors
+    "VIDEO_NOT_FOUND": "Video not found",
+    "VIDEO_NOT_STREAMABLE": "Video is not ready for streaming",
+    "VIDEO_FILE_NOT_FOUND": "Video file path could not be resolved",
+    "VIDEO_FILE_NOT_ON_DISK": "Video file not found on disk",
+    "VIDEO_STILL_DOWNLOADING": "Not enough data downloaded yet, please try again shortly",
+    "SERVICE_UNAVAILABLE": "Service temporarily unavailable",
 }

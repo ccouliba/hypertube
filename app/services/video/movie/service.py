@@ -12,6 +12,3 @@ class MovieService(VideoService):
     
     def get_content_type(self) -> ContentType:
         return ContentType.MOVIE
-
-
-Movie_Service: MovieService = MovieService()

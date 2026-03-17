@@ -12,5 +12,5 @@ class TVShow(Video):
         "polymorphic_identity": ContentType.TV_SHOW.value,
     }
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<TVShow {self.title} ({self.year})>"

@@ -1,13 +1,15 @@
 """Auth domain models"""
-from datetime import datetime
+import secrets
+import hashlib
+from datetime import (datetime, timedelta)
 from werkzeug.security import (
-    generate_password_hash, 
+    generate_password_hash,
     check_password_hash
 )
 from app.db.session import db
-from app.services.auth.settings import auth_settings as settings
+from app.core.configs import APP_CONFIG
 
-BASE_URL: str = settings.get("APP_URL", "http://localhost:5000")
+BASE_URL: str = APP_CONFIG["app"]["url"]
 
 
 class User(db.Model):
@@ -44,3 +46,47 @@ class User(db.Model):
     
     def __repr__(self) -> str:
         return f"<User {self.username}>"
+
+
+class RefreshToken(db.Model):
+    """Opaque refresh token — stored as SHA256 hash, sent as httpOnly cookie"""
+
+    __tablename__ = "refresh_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)  # SHA256 hex
+    expires_at = db.Column(db.DateTime, nullable=False)
+    revoked = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship(
+        "User",
+        backref=db.backref("refresh_tokens", lazy="dynamic", cascade="all, delete-orphan"),
+    )
+
+    @staticmethod
+    def hash_token(raw: str) -> str:
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    @classmethod
+    def generate(cls, user_id: int, expires_days: int) -> tuple["RefreshToken", str]:
+        """Create a new RefreshToken instance + return the raw token to set in cookie"""
+        raw = secrets.token_urlsafe(64)
+        instance = cls(
+            user_id=user_id,
+            token_hash=cls.hash_token(raw),
+            expires_at=datetime.utcnow() + timedelta(days=expires_days),
+        )
+        return instance, raw
+
+    def is_valid(self) -> bool:
+        return not self.revoked and self.expires_at > datetime.utcnow()
+
+    def __repr__(self) -> str:
+        return f"<RefreshToken user_id={self.user_id} revoked={self.revoked}>"

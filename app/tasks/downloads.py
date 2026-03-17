@@ -1,13 +1,35 @@
+import os
 import logging
+import subprocess
+from pathlib import Path
 from typing import Optional
-from app.services.torrent import TorrentManager
-from app.tasks import (
-    celery_app,
-    celery_settings as settings,
-)
+from app.services.torrent import torrent_service
+from app.services import MovieService, TVShowService
+from app.tasks.celery_app import celery_app
+from app.core.configs import CELERY_CONFIG
+from app.core.errors.handlers import APIError
+from celery.signals import worker_process_init
 
 logging.basicConfig(level=logging.INFO)
 LOGGER: logging.Logger = logging.getLogger(__name__)
+
+_retry = CELERY_CONFIG["retry"]
+MONITOR_INTERVAL: int = int(os.getenv("TORRENT_MONITOR_INTERVAL", "5"))
+
+# Extensions the browser plays natively
+_BROWSER_NATIVE: frozenset = frozenset({".mp4", ".webm", ".ogg"})
+
+
+@worker_process_init.connect
+def _reconnect_torrent_service(**kwargs):
+    """Re-authenticate qBittorrent client after Celery prefork.
+    Each forked worker inherits an invalid TCP session — this restores it.
+    """
+    try:
+        torrent_service.qb.auth_log_in()
+        LOGGER.info("TorrentService: post-fork re-authentication successful")
+    except Exception as e:
+        LOGGER.warning(f"TorrentService: post-fork re-login failed: {e}")
 
 
 @celery_app.task(name="tasks.start_torrent_download", bind=True)
@@ -29,10 +51,14 @@ def start_torrent_download(
         Dict with download status and torrent info
     """    
     try:
-        LOGGER.info(f"Starting torrent download for {content_type} video_id={video_id}")
-        LOGGER.info(f"Torrent hash: {torrent_hash}")
-        result: dict = TorrentManager.start_download(torrent_url, torrent_hash)
-        LOGGER.info(f"Download started successfully for video_id: {video_id}")
+        LOGGER.info(f"Downloads: Starting torrent download for {content_type} video_id={video_id}")
+        LOGGER.info(f"Downloads: Torrent hash: {torrent_hash}")
+        result: dict = torrent_service.start_download(torrent_url, torrent_hash)
+        LOGGER.info(f"Downloads: Download started successfully for video_id: {video_id}")
+        monitor_torrent_status.apply_async(
+            args=[torrent_hash, video_id, content_type],
+            countdown=MONITOR_INTERVAL
+        )
         return {
             "status": "started",
             "torrent_url": torrent_url,
@@ -42,32 +68,42 @@ def start_torrent_download(
             "result": result
         }
     except Exception as e:
-        LOGGER.error(f"Error starting torrent download: {e}")
+        LOGGER.exception("Downloads: Error starting torrent download")
         self.retry(
-            countdown=settings["RETRY_COUNTDOWN"],
-            max_retries=settings["MAX_RETRIES"],
+            countdown=_retry["countdown"],
+            max_retries=_retry["max_retries"],
             exc=e
         )
 
 
 @celery_app.task(name="tasks.monitor_torrent_status")
-def monitor_torrent_status(torrent_hash: str) -> Optional[dict]:
+def monitor_torrent_status(
+    torrent_hash: str,
+    video_id: int,
+    content_type: str
+) -> Optional[dict]:
     """
-    Monitor the status of a torrent download
-    Args:
-        torrent_hash: The hash of the torrent to monitor
-    Returns:
-        Dict with current torrent status or None if not found
+    Poll qBittorrent until the download finishes, then trigger post-processing.
     """
     try:
-        status: Optional[dict] = TorrentManager.get_download_status(torrent_hash)
+        status: Optional[dict] = torrent_service.get_download_status(torrent_hash)
         if status:
-            LOGGER.info(f"Torrent {torrent_hash}: {status['progress']:.1f}% complete")
+            LOGGER.info(f"Downloads: Torrent {torrent_hash}: {status['progress']:.1f}% — video_id={video_id}")
+            video_service = MovieService() if content_type == "movie" else TVShowService()
+            video_service.update_download_progress(video_id, status["progress"])
             if status["is_finished"]:
-                LOGGER.info(f"Torrent {torrent_hash} download complete!")
+                LOGGER.info(f"Downloads: Torrent {torrent_hash} complete — triggering post-processing")
+                process_completed_download.delay(torrent_hash, video_id, content_type)
+                return status
+        else:
+            LOGGER.info(f"Downloads: Torrent {torrent_hash} not yet in qBittorrent, retrying in {MONITOR_INTERVAL}s")
+        monitor_torrent_status.apply_async(
+            args=[torrent_hash, video_id, content_type],
+            countdown=MONITOR_INTERVAL
+        )
         return status
     except Exception as e:
-        LOGGER.error(f"Error monitoring torrent {torrent_hash}: {e}")
+        LOGGER.exception("Downloads: Error monitoring torrent %s", torrent_hash)
         return None
 
 
@@ -85,53 +121,97 @@ def remove_torrent(
         Dict with removal status
     """
     try:
-        success: bool = TorrentManager.remove_download(
+        success: bool = torrent_service.remove_download(
             torrent_hash,
             delete_files
         )
-        LOGGER.info(f"Torrent {torrent_hash} removed: {success}")
+        LOGGER.info(f"Downloads: Torrent {torrent_hash} removed: {success}")
         return {
             "status": "removed" if success else "failed",
             "torrent_hash": torrent_hash
         }
     except Exception as e:
-        LOGGER.error(f"Error removing torrent {torrent_hash}: {e}")
+        LOGGER.exception("Downloads: Error removing torrent %s", torrent_hash)
         return {"status": "error", "error": str(e)}
 
 
 @celery_app.task(name="tasks.process_completed_download")
-def process_completed_download(torrent_hash: str) -> dict:
+def process_completed_download(
+    torrent_hash: str,
+    video_id: int,
+    content_type: str
+) -> dict:
     """
-    Post-processing task after download completion
-    Extracts video file, updates database, sends notifications, etc.
-    Args:
-        torrent_hash: The hash of the completed torrent
-    Returns:
-        Dict with processing results
+    Post-processing after a torrent finishes:
+    - Resolves the video file on disk
+    - Marks the video COMPLETED in DB and persists file_path
+    - Triggers convert_video if the container is not browser-native (MKV, AVI…)
     """
     try:
-        video_file: Optional[str] = TorrentManager.get_video_file(torrent_hash)
-        if video_file:
-            LOGGER.info(f"Video file found: {video_file}")
-            # Here I can:
-            # - Update movie record in database with video path
-            # - Send notification to user
-            # - Start transcoding if needed
-            return {
-                "status": "processed",
-                "video_file": video_file,
-                "torrent_hash": torrent_hash
-            }
-        else:
-            LOGGER.warning(f"No video file found for torrent {torrent_hash}")
+        video_file: Optional[str] = torrent_service.get_video_file(torrent_hash)
+        if not video_file:
+            LOGGER.warning(f"Downloads: No video file found for torrent {torrent_hash}")
             return {"status": "no_video_found", "torrent_hash": torrent_hash}
+        video_service = MovieService() if content_type == "movie" else TVShowService()
+        try:
+            video_service.complete_download(video_id, video_file)
+            LOGGER.info(f"Downloads: video_id={video_id} marked COMPLETED — file: {video_file}")
+        except (ValueError, APIError):
+            LOGGER.warning(f"Downloads: video_id={video_id} not found in DB")
+        ext: str = Path(video_file).suffix.lower() # Schedule FFmpeg remux for non-native containers (one-time, async)
+        if ext not in _BROWSER_NATIVE:
+            LOGGER.info(f"Downloads: Non-native container {ext} — scheduling conversion for video_id={video_id}")
+            convert_video.delay(video_id, content_type, video_file)
+        return {
+            "status": "processed",
+            "video_id": video_id,
+            "video_file": video_file,
+            "torrent_hash": torrent_hash,
+        }
     except Exception as e:
-        LOGGER.error(f"Error processing completed download {torrent_hash}: {e}")
+        LOGGER.exception("Downloads: Error processing completed download %s", torrent_hash)
         return {"status": "error", "error": str(e)}
 
 
-if __name__ == "__main__":
-    # For testing purposes
-    test_magnet: str = "magnet:?xt=urn:btih:EXAMPLEHASH&dn=Example"
-    task = start_torrent_download.delay(test_magnet, movie_id=123)
-    print(f"Started download task with ID: {task.id}")
+@celery_app.task(name="tasks.convert_video")
+def convert_video(
+    video_id: int,
+    content_type: str,
+    input_path: str
+) -> dict:
+    """
+    Remux a non-native container (MKV, AVI…) to MP4 using FFmpeg -c copy.
+    No re-encoding: fast and lossless.
+    Updates file_path in DB so subsequent streams use direct Range requests.
+    """
+    output_path: str = str(Path(input_path).with_suffix(".mp4"))
+    if input_path == output_path:
+        LOGGER.info(f"Downloads: Already .mp4, skipping conversion: {input_path}")
+        return {"status": "skipped", "file": input_path}
+    try:
+        LOGGER.info(f"Downloads: Converting {input_path} → {output_path} for video_id={video_id}")
+        proc: subprocess.CompletedProcess = subprocess.run(
+            [
+                "ffmpeg", "-i", input_path,
+                "-c", "copy",
+                "-movflags", "faststart",
+                "-y", output_path,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        if proc.returncode != 0:
+            error = proc.stderr.decode(errors="replace")
+            LOGGER.error(f"Downloads: FFmpeg failed for video_id={video_id}: {error}")
+            return {"status": "error", "error": error}
+        video_service = MovieService() if content_type == "movie" else TVShowService()
+        video_service.update(video_id, {"file_path": output_path})
+        LOGGER.info(f"Downloads: video_id={video_id} file_path updated to {output_path}")
+        try:
+            os.remove(input_path) # Remove original non-native file to save disk space
+        except OSError as e:
+            LOGGER.warning(f"Downloads: Could not delete original file {input_path}: {e}")
+        return {"status": "converted", "output": output_path}
+    except Exception as e:
+        LOGGER.exception("Downloads: Error converting video_id=%s", video_id)
+        return {"status": "error", "error": str(e)}

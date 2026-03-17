@@ -1,12 +1,11 @@
-# """Torrent services package initialization
+"""Torrent domain — download manager and torrent service"""
+from app.services.torrent.service import TorrentService
 
-# Provides:
-# - Torrent download manager
-# - Torrent Service for business logic
-# - Singleton instance: TorrentManager
-# """
-# from services.torrent.service import TorrentManager
+# Singleton — one authenticated session shared across VideoService and Celery tasks.
+# Prevents multiple concurrent auth_log_in() calls that trigger qBittorrent IP bans.
+torrent_service: TorrentService = TorrentService()
 
-# __all__ = [
-#     "TorrentManager",
-# ]
+__all__ = [
+    "TorrentService",
+    "torrent_service",
+]

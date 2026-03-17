@@ -1,8 +1,10 @@
 """
 Abstract base class for content providers
 """
+import logging
 from abc import (ABC, abstractmethod)
 
+LOGGER: logging.Logger = logging.getLogger(__name__)
 
 class Provider(ABC):
     """Abstract base class for content providers"""
@@ -23,7 +25,7 @@ class Provider(ABC):
             provider_name: str
         ) -> list[dict]:
         """Centralized Provider error handling"""
-        print(f"{provider_name} Provider error: {error}")
+        LOGGER.error(f"{provider_name} Provider error: {error}")
         return []
     
     def _format_result(

@@ -1,19 +1,16 @@
-# """Errors module for core application
+"""Core errors — API error class, handler and standardized messages"""
+from app.core.errors.handlers import (
+    APIError,
+    handle_api_error,
+    handle_http_exception,
+    handle_unhandled_exception,
+)
+from app.core.errors.messages import ERROR_MESSAGES
 
-# Provides:
-# - API error handling
-# - Standardized error messages
-# """
-
-# from core.errors.handlers import APIError
-# from core.errors.messages import ERROR_MESSAGES
-# from core.errors.handlers import (
-#     handle_api_error,
-#     APIError
-# )
-
-# __all__ = [
-#     "APIError",
-#     "ERROR_MESSAGES",
-#     "handle_api_error",
-# ]
+__all__ = [
+    "APIError",
+    "handle_api_error",
+    "handle_http_exception",
+    "handle_unhandled_exception",
+    "ERROR_MESSAGES",
+]

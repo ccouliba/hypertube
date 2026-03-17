@@ -6,37 +6,73 @@ import os
 from pathlib import Path
 from typing import (Optional, Dict)
 from qbittorrentapi import Client
-from app.services.torrent.settings import qb_settings as settings
+from app.core.configs import QBT_CONFIG
 import logging
+import time
 
-LOGGER = logging.getLogger(__name__)
+LOGGER: logging.Logger = logging.getLogger(__name__)
 
-HOST: str = settings["HOST"]
-USERNAME: str = settings["USER"]
-PASSWORD: str = settings["PASS"]
-DOWNLOAD_DIR = settings["DOWNLOADS_DIR"]
+HOST: str = QBT_CONFIG["qbittorrent"]["host"]
+USERNAME: str = QBT_CONFIG["qbittorrent"]["user"]
+PASSWORD: str = QBT_CONFIG["qbittorrent"]["pass"]
+DOWNLOAD_DIR: str = QBT_CONFIG["downloads"]["directory"]
 Path(DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
-VIDEO_EXTENSIONS: set = set(settings["VIDEO_EXTENSIONS"])
+VIDEO_EXTENSIONS: set = set(QBT_CONFIG["video"]["extensions"])
+
 
 class TorrentService:
     """
     Manages torrent downloads using qBittorrent API
-    
     This service provides:
     - Starting/pausing/resuming downloads
     - Status tracking and progress monitoring
     - Video file detection and retrieval
     - Torrent removal with optional file deletion
     """
-    
+
+    _banned_until: float = 0.0  # class-level: shared across all instances
+    BAN_RETRY_DELAY: int = 300  # seconds before retrying after a ban (5 min)
+
     def __init__(self) -> None:
         """Initialize qBittorrent client with credentials from config"""
-        self.qb = Client(
+        self.qb: Client = Client(
             host=HOST,
             username=USERNAME,
-            password=PASSWORD
+            password=PASSWORD,
+            REQUESTS_ARGS={"timeout": 10},
         )
-        LOGGER.info("TorrentService initialized with qBittorrent")
+        try:
+            self.qb.auth_log_in()
+            LOGGER.info("TorrentService: initialized and logged in to qBittorrent")
+        except Exception as e:
+            if "banned" in str(e).lower():
+                TorrentService._banned_until = time.time() + TorrentService.BAN_RETRY_DELAY
+                LOGGER.warning(f"TorrentService: IP banned on init — pausing retries for {TorrentService.BAN_RETRY_DELAY}s")
+            else:
+                LOGGER.warning(f"TorrentService: initial login failed (will retry on use): {e}")
+
+    def _ensure_logged_in(self) -> None:
+        """Re-authenticate if the session has expired. No-ops while IP is banned."""
+        now = time.time()
+        if now < TorrentService._banned_until:
+            remaining = int(TorrentService._banned_until - now)
+            raise Exception(f"TorrentService: IP still banned — {remaining}s before next retry")
+        try:
+            self.qb.app_version()
+            return  # session alive
+        except Exception as e:
+            if "banned" in str(e).lower():
+                TorrentService._banned_until = time.time() + TorrentService.BAN_RETRY_DELAY
+                LOGGER.error(f"TorrentService: IP banned by qBittorrent — pausing retries for {TorrentService.BAN_RETRY_DELAY}s")
+                raise
+        LOGGER.info("TorrentService: qBittorrent session lost, re-authenticating")
+        try:
+            self.qb.auth_log_in()
+        except Exception as e:
+            if "banned" in str(e).lower():
+                TorrentService._banned_until = time.time() + TorrentService.BAN_RETRY_DELAY
+                LOGGER.error(f"TorrentService: IP banned by qBittorrent — pausing retries for {TorrentService.BAN_RETRY_DELAY}s")
+            raise
     
     def start_download(
         self,
@@ -54,18 +90,21 @@ class TorrentService:
             Exception: If download fails to start
         """
         try:
+            self._ensure_logged_in()
             self.qb.torrents_add(
                 urls=torrent_url,
-                save_path=DOWNLOAD_DIR
+                save_path=DOWNLOAD_DIR,
+                is_sequential_download=True,
+                is_first_last_piece_priority=True
             )
-            LOGGER.info(f"Started download - Hash: {torrent_hash}")
+            LOGGER.info(f"TorrentService: Started download — hash: {torrent_hash}")
             return {
                 "status": "started",
                 "torrent_hash": torrent_hash,
                 "save_path": DOWNLOAD_DIR
             }
         except Exception as e:
-            LOGGER.error(f"Error starting download: {e}")
+            LOGGER.exception("TorrentService: Error starting download")
             raise
     
     def get_download_status(
@@ -80,7 +119,8 @@ class TorrentService:
             Dict with progress, speeds, peers, etc. or None if not found
         """
         try:
-            torrents = self.qb.torrents_info(torrent_hashes=[torrent_hash])
+            self._ensure_logged_in()
+            torrents: list = self.qb.torrents_info(torrent_hashes=[torrent_hash])
             if torrents:
                 t = torrents[0]
                 return {
@@ -99,7 +139,7 @@ class TorrentService:
                     "is_seeding": t.state == "uploading",
                 }
         except Exception as e:
-            LOGGER.error(f"Error getting status for {torrent_hash}: {e}")
+            LOGGER.exception("TorrentService: Error getting status for %s", torrent_hash)
         return None
     
     def pause_download(self, torrent_hash: str) -> bool:
@@ -111,11 +151,12 @@ class TorrentService:
             True if successful, False otherwise
         """
         try:
+            self._ensure_logged_in()
             self.qb.torrents_pause(torrent_hashes=[torrent_hash])
-            LOGGER.info(f"Paused download for {torrent_hash}")
+            LOGGER.info(f"TorrentService: Paused download for {torrent_hash}")
             return True
         except Exception as e:
-            LOGGER.error(f"Error pausing {torrent_hash}: {e}")
+            LOGGER.exception("TorrentService: Error pausing %s", torrent_hash)
             return False
     
     def resume_download(self, torrent_hash: str) -> bool:
@@ -127,11 +168,12 @@ class TorrentService:
             True if successful, False otherwise
         """
         try:
+            self._ensure_logged_in()
             self.qb.torrents_resume(torrent_hashes=[torrent_hash])
-            LOGGER.info(f"Resumed download for {torrent_hash}")
+            LOGGER.info(f"TorrentService: Resumed download for {torrent_hash}")
             return True
         except Exception as e:
-            LOGGER.error(f"Error resuming {torrent_hash}: {e}")
+            LOGGER.exception("TorrentService: Error resuming %s", torrent_hash)
             return False
     
     def remove_download(
@@ -148,11 +190,12 @@ class TorrentService:
             True if successful, False otherwise
         """
         try:
+            self._ensure_logged_in()
             self.qb.torrents_delete(torrent_hashes=[torrent_hash], delete_files=True)
-            LOGGER.info(f"Removed torrent {torrent_hash} (delete_files={delete_files})")
+            LOGGER.info(f"TorrentService: Removed torrent {torrent_hash} (delete_files={delete_files})")
             return True
         except Exception as e:
-            LOGGER.error(f"Error removing {torrent_hash}: {e}")
+            LOGGER.exception("TorrentService: Error removing %s", torrent_hash)
             return False
     
     def get_video_file(self, torrent_hash: str) -> Optional[str]:
@@ -165,24 +208,23 @@ class TorrentService:
             Full path to the video file or None if not found
         """
         try:
-            torrents = self.qb.torrents_info(torrent_hashes=[torrent_hash])
+            self._ensure_logged_in()
+            torrents: list = self.qb.torrents_info(torrent_hashes=[torrent_hash])
             if torrents:
                 t = torrents[0]
-                files = self.qb.torrents_files(torrent_hash=t.hash)
+                files: list = self.qb.torrents_files(torrent_hash=t.hash)
                 # Find the largest video file
                 video_extensions: set = VIDEO_EXTENSIONS
-                largest_video = None
-                largest_size = 0
+                largest_video: str | None = None
+                largest_size: int = 0
                 for file in files:
                     file_path = file.name
                     file_size = file.size
-                    file_ext = Path(file_path).suffix.lower()                    
+                    file_ext: str = Path(file_path).suffix.lower()                    
                     if file_ext in video_extensions and file_size > largest_size:
-                        largest_video = os.path.join(t.save_path, file_path)
-                        largest_size = file_size
+                        largest_video: str | None = os.path.join(t.save_path, file_path)
+                        largest_size: int = file_size
                 return largest_video
         except Exception as e:
-            LOGGER.error(f"Error getting video file for {torrent_hash}: {e}")
+            LOGGER.error(f"TorrentService: Error getting video file for {torrent_hash}: {e}")
         return None
-
-TorrentManager: TorrentService = TorrentService()

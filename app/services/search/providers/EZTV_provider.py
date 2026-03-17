@@ -1,13 +1,13 @@
 """EZTV API provider for TV show torrents search"""
 import requests
 from app.services.search.providers.base import Provider
-from app.services.search.settings import providers_settings as settings
+from app.core.configs import PROVIDERS_CONFIG as _p
 
-NAME: str = settings["EZTV_NAME"]
-EZTV_CONTENT: str = settings["EZTV_CONTENT_TYPE"]
-MAX_PER_PAGE: int = int(settings["RESULTS_MAX_PER_PAGE"])
-TIMEOUT: int = int(settings["TIMEOUT_DEFAULT"])  
-GET_TORRENTS_URL: str = settings["EZTV_TV_SHOW_URL"]
+NAME: str = _p["eztv"]["name"]
+EZTV_CONTENT: str = _p["eztv"]["content"]
+MAX_PER_PAGE: int = _p["pagination"]["max_per_page"]
+TIMEOUT: int = int(_p["timeout"]["default"])
+GET_TORRENTS_URL: str = f"{_p['eztv']['base_url']}/{_p['eztv']['get_torrents']}"
 
 
 class EZTVProvider(Provider):
@@ -15,12 +15,12 @@ class EZTVProvider(Provider):
     
     def search(self, query: str) -> list[dict]:
         """Search TV shows on EZTV by title"""
-        torrents = self._fetch_eztv_torrents()
+        torrents: list[dict] = self._fetch_eztv_torrents()
         return self._filter_by_query(torrents, query)
     
     def get_popular(self) -> list[dict]:
         """Get popular TV shows from EZTV (recent torrents)"""
-        torrents = self._fetch_eztv_torrents()
+        torrents: list[dict] = self._fetch_eztv_torrents()
         return torrents[:MAX_PER_PAGE]
     
     def _fetch_eztv_torrents(self) -> list[dict]:
@@ -39,7 +39,7 @@ class EZTVProvider(Provider):
                 timeout=TIMEOUT
             )
             response.raise_for_status()
-            data = response.json()
+            data: dict = response.json()
             if not data.get("torrents"):
                 return []
             return [self._format_eztv_show(torrent) for torrent in data["torrents"]]
@@ -60,8 +60,8 @@ class EZTVProvider(Provider):
     
     def _format_eztv_show(self, torrent: dict) -> dict:
         """Format EZTV torrent data to standard format"""
-        seeds = torrent.get("seeds") or 0
-        torrents = [{
+        seeds: int = torrent.get("seeds") or 0
+        torrents: list[dict] = [{
             "quality": "TV",
             "type": "tv",
             "size": torrent.get("size_bytes"),
@@ -86,6 +86,4 @@ class EZTVProvider(Provider):
             content_type=EZTV_CONTENT,
             torrents=torrents
         )
-    
 
-EZTV_Provider: EZTVProvider = EZTVProvider()

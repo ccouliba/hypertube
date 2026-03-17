@@ -2,12 +2,13 @@
 import requests
 from typing import Optional
 from app.services.search.providers.base import Provider
-from app.services.search.settings import providers_settings as settings
+from app.core.configs import PROVIDERS_CONFIG as _p
 
-NAME: str = settings["YTS_NAME"]
-DEFAULT_TIMEOUT: int = settings["TIMEOUT_DEFAULT"]
-RESULTS_PER_PROVIDER: int = settings["RESULTS_MAX_PER_PROVIDER"]
-LIST_URLS: str = settings["YTS_MOVIE_URL"]
+NAME: str = _p["yts"]["name"]
+YTS_CONTENT: str = _p["yts"]["content"]
+DEFAULT_TIMEOUT: int = int(_p["timeout"]["default"])
+RESULTS_PER_PROVIDER: int = int(_p["pagination"]["max_results_per_provider"])
+LIST_URLS: str = f"{_p['yts']['base_url']}/{_p['yts']['list_movies']}"
 
 
 class YTSProvider(Provider):
@@ -57,7 +58,7 @@ class YTSProvider(Provider):
     
     def _format_yts_movie(self, movie: dict) -> dict:
         """Format YTS movie data to standard format"""
-        torrents = [
+        torrents: list[dict] = [
             {
                 "quality": t.get("quality"),
                 "type": t.get("type"),
@@ -82,9 +83,7 @@ class YTSProvider(Provider):
                 "large_cover": movie.get("large_cover_image"),
                 "language": movie.get("language"),
             },
-            provider=NAME is not None,
-            content_type="movie",
+            provider=NAME,
+            content_type=YTS_CONTENT,
             torrents=torrents
         )
-
-YTS_Provider: YTSProvider = YTSProvider()

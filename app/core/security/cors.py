@@ -7,13 +7,13 @@ from flask_cors import CORS
 def define_CORS(app: Flask) -> None:
     """Define CORS settings for the Flask app"""
 
-    from app import app_settings as settings
+    from app.core.configs import APP_CONFIG
     
     CORS(app, resources={
-    r"/api/*": {
-            "origins": settings.get("LOCAL_URLS", []) + settings.get("EXTERNAL_URLS", []),
-            "methods": settings.get("METHODS", []),
-            "allow_headers": settings.get("HEADERS", []),
-            "supports_credentials": settings.get("CREDENTIALS", False)
+        r"/api/*": {
+            "origins": APP_CONFIG["local_urls"],
+            "methods": APP_CONFIG["allowed_methods"],
+            "allow_headers": APP_CONFIG["allowed_headers"],
+            "supports_credentials": APP_CONFIG["supports_credentials"],
         }
     })

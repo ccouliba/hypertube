@@ -1,95 +1,105 @@
-# Hypertube – Documentation Technique
+# HyperTube
 
-## Architecture Générale
+Plateforme de streaming de films et séries via torrents.
+
+---
+
+## Stack
 
 ### Backend
-- **API REST Flask** (auth, vidéos, recherche, torrents)
-- **Celery** pour les tâches asynchrones (téléchargements, maintenance)
-- **PostgreSQL** (base de données)
-- **Redis** (broker Celery)
-- **qBittorrent** (client P2P)
+| Technologie | Rôle |
+|---|---|
+| **Flask 3** | Framework web, Application Factory Pattern |
+| **flask-smorest** | Blueprints OpenAPI 3 — génère la spec et Swagger UI automatiquement |
+| **Marshmallow** | Validation et sérialisation des données entrantes/sortantes |
+| **flask-migrate** (Alembic) | Migrations de schéma BDD versionnées |
+| **Flask-SQLAlchemy** | ORM, modèles, sessions |
+| **PostgreSQL** | Base de données relationnelle |
+| **Celery + Redis** | Tâches asynchrones (téléchargements, maintenance planifiée) |
+| **qBittorrent** | Client BitTorrent piloté via son API WebUI |
+| **Flask-CORS** | Politique CORS explicite |
 
 ### Frontend
-- Organisation par features (auth, vidéos, etc.)
-- Séparation claire UI / logique métier / hooks / services
+| Technologie | Rôle |
+|---|---|
+| **React 18 + TypeScript** | UI, Vite comme bundler |
+| **Redux Toolkit** | État global (auth, session) |
+| **Axios** | Client HTTP avec interceptors JWT |
+| **styled-components** | Theming et styles isolés par composant |
+| **openapi-typescript** | Génère `src/types/api.d.ts` depuis la spec OpenAPI du backend |
 
 ---
 
-## Configuration & Secrets
-- Toutes les variables sensibles sont dans `.env` (jamais versionné)
-- Exemple de variables :
-  - DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, DB_PORT
-  - YTS_BASE_URL, EZTV_BASE_URL, TMDB_API_KEY, etc.
-- Pour changer une URL d’API ou une clé, modifie `.env` ou les fichiers `config.py` de chaque service.
-
----
-
-## API Principales
-
-### Authentification
-- `/api/auth/register` : Inscription
-- `/api/auth/login` : Connexion
-- `/api/auth/users` : Liste des utilisateurs
-
-### Vidéos
-- `/api/videos/` : Liste tous les contenus (movies + tv_shows)
-- `/api/videos/<id>` : Détail d’un contenu
-- Paramètre `content_type` pour filtrer (movie, tv_show, all)
-- PATCH pour mettre à jour, POST pour marquer comme vu
-
-### Recherche
-- `/api/search` : Recherche unifiée sur tous les providers (YTS, EZTV, etc.)
-
-### Torrents
-- `/api/torrents/download` : Démarrer un téléchargement (asynchrone via Celery)
-- `/api/torrents/status/<hash>` : Statut d’un téléchargement
-- `/api/torrents/task/<task_id>` : Statut d’une tâche Celery
-
----
-
-## Tâches Asynchrones & Maintenance
-- **Celery** gère les téléchargements et le nettoyage automatique des vieux films.
-- Nettoyage automatique : suppression des films non vus depuis 30 jours (configurable).
-- Tâches planifiées via Celery Beat.
-
----
-
-## Gestion des Erreurs
-- Toutes les erreurs API utilisent la classe `APIError` et des messages standardisés (`ERROR_MESSAGES`).
-- Codes HTTP utilisés : 400, 401, 403, 404, 409, 415, 422, 500.
-- Messages d’erreur centralisés pour l’auth, la validation, la recherche, les vidéos.
-
----
-
-## Projection
-- **Sécurité** : Jamais de secrets en dur, toujours dans `.env`.
-- **Non-root Docker** : Tous les services Python tournent sous un utilisateur non-root.
-- **PYTHONPATH** : Uniformisé à `/app` dans tous les conteneurs Python.
-- **Imports** : Toujours absolus, structure de projet claire.
-- **Tests** : Prévoir des tests unitaires pour chaque service.
-
----
-
-## Démarrage rapide
+## Démarrage
 
 ```bash
 cp .env.example .env
-# Édite .env avec tes vraies valeurs
+# Renseigner DB_USER, DB_PASSWORD, DB_NAME, JWT_SECRET_KEY, TMDB_API_KEY, etc.
 
 docker compose up --build
 ```
 
+- Backend + Swagger UI : `http://localhost:5000/api/docs`
+- Frontend : `http://localhost:3000`
+- qBittorrent WebUI : `http://localhost:8080`
+
+Pour regénérer les types TypeScript depuis la spec (backend doit être démarré) :
+
+```bash
+cd front && npm run generate:api
+```
+
 ---
 
-## Structure des dossiers (exemple backend)
+## API
+
+Spec complète disponible sur `/api/docs` (Swagger UI) ou `/api/openapi.json`.
+
+| Préfixe | Description |
+|---|---|
+| `GET /api/info` | Métadonnées de l'API (version, liens docs) |
+| `/api/auth` | Inscription, connexion, gestion des utilisateurs |
+| `/api/video` | Catalogue, détail, marquage comme vu |
+| `/api/search` | Recherche unifiée (YTS, EZTV, TMDb) |
+
+Toutes les routes protégées attendent un header `Authorization: Bearer <token>`.
+
+---
+
+## Tâches asynchrones
+
+Celery orchestre deux workflows :
+
+- **Téléchargement** : `start → monitor (polling 30s) → process` — déclenché par POST sur `/api/video/<id>/download`
+- **Maintenance** : suppression quotidienne des vidéos non vues depuis N jours (Celery Beat)
+
+---
+
+## Sécurité
+
+- Secrets exclusivement dans `.env` (non versionné)
+- JWT stocké **en mémoire** côté front (Redux), jamais en localStorage
+- Conteneurs Python en mode non-root
+- Mots de passe : lettre + chiffre + caractère spécial obligatoires (validé par Marshmallow)
+
+---
+
+## Structure
 
 ```
 app/
-├── api/           # Routes Flask
-├── core/          # Middlewares, erreurs, CORS
-├── db/            # Modèles et init DB
-├── services/      # Logique métier (auth, video,torrent, search)
-├── tasks/         # Tâches Celery
-├── app.py         # Entrée principale Flask
-├── requirements.txt
+├── api/          # Routes flask-smorest (blueprints)
+├── schemas/      # Schémas Marshmallow (contrats d'API)
+├── services/     # Logique métier (auth, video, search, torrent, maintenance)
+├── tasks/        # Orchestration Celery (downloads, maintenance)
+├── core/         # Config, erreurs, CORS, JWT
+└── db/           # Session SQLAlchemy, migrations Alembic
+
+front/src/
+├── api/          # Instance Axios + interceptors
+├── services/     # Appels API par domaine
+├── store/        # Redux slices
+├── hooks/        # Custom hooks
+├── features/     # Pages par domaine
+└── types/        # Interfaces (api.d.ts généré, types manuels)
 ```

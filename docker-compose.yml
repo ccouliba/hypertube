@@ -1,4 +1,21 @@
 services:
+
+  nginx:
+    container_name: nginx
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "3000:80"
+    volumes:
+      - ./downloads:/downloads:ro
+    networks:
+      - app-network
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    
   app:
     container_name: backend
     build:
@@ -8,15 +25,12 @@ services:
       - .env
     ports:
       - "5000:5000"
+    dns:
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
     volumes:
-      - ./app/:/app/src/
+      - ./app/:/app/
       - ./downloads:/downloads
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - app-network
     depends_on:
@@ -26,6 +40,12 @@ services:
         condition: service_healthy
       qbittorrent:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
    
     restart: unless-stopped
     tty: true
@@ -71,11 +91,13 @@ services:
   qbittorrent:
     image: linuxserver/qbittorrent:latest
     container_name: qbittorrent
+    env_file:
+      - .env
     environment:
-      - PUID=1000
-      - PGID=1000
-      - WEBUI_PORT=8080
-      - TZ=Europe/Paris
+      - PUID=${QB_PUID}
+      - PGID=${QB_PGID}
+      - WEBUI_PORT=${QB_WEBUI_PORT}
+      - TZ=${QB_TZ}
     ports:
       - "8080:8080"
     volumes:
@@ -97,16 +119,15 @@ services:
     build:
       context: .
       dockerfile: celery/Dockerfile
-    command: celery -A app.tasks.celery:celery_app worker --beat --loglevel=info
+    command: celery -A app.tasks.celery_app:celery_app worker --beat --loglevel=info --schedule /tmp/celerybeat-schedule
     env_file:
       - .env
+    dns:
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
     volumes:
       - ./app:/app
       - ./downloads:/downloads
-    environment:
-      - QBITTORRENT_HOST=http://qbittorrent:8080
-      - QBITTORRENT_USER=${QBITTORRENT_USER:-admin}
-      - QBITTORRENT_PASS=${QBITTORRENT_PASS:-secret123}
     networks:
       - app-network
     depends_on:
@@ -126,120 +147,4 @@ volumes:
 networks:
   app-network:
     driver: bridge
-    
-
-
-
-# services:
-#   app:
-#     container_name: backend
-#     build:
-#       context: ./app
-#       dockerfile: Dockerfile
-#     env_file:
-#       - .env
-#     ports:
-#       - 5000:5000
-#     volumes:
-#       - ./app/src/:/app/src/
-#       - ./downloads:/app/downloads
-#     healthcheck:
-#       test: ["CMD-SHELL", "curl -f http://localhost:5000 || exit 1"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
-#     networks:
-#       - app-network
-#     depends_on:
-#       database:
-#         condition: service_healthy
-#       redis:
-#         condition: service_healthy
-#       qbittorrent:
-#         condition: service_healthy
-#     tty: true
-
-#   database:
-#     container_name: database
-#     build:
-#       context: ./db
-#       dockerfile: Dockerfile
-#     env_file:
-#       - .env
-#     ports:
-#       - 5432:5432
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data
-#     # environment:
-#     #   POSTGRES_USER: ${DB_USER:-hypertube}
-#     #   POSTGRES_PASSWORD: ${DB_PASSWORD}
-#     #   POSTGRES_DB: ${DB_NAME:-hypertube_db}
-#     networks:
-#       - app-network
-#     healthcheck:
-#       test: ["CMD-SHELL", "pg_isready -U hypertube -d hypertube_db"]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 5
-#     tty: true
-
-#   qbittorrent:
-#     image: linuxserver/qbittorrent:latest
-#     container_name: qbittorrent
-#     ports:
-#       - "8080:8080"
-#     networks:
-#       - app-network
-#     healthcheck:
-#       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
-#     restart: unless-stopped
-#     tty: true
-
-#   celery-worker: # Celery worker service with Beat integrated
-#     container_name: celery-worker
-#     build:
-#       context: .
-#       dockerfile: ./celery/Dockerfile
-#     command: celery -A src.tasks.celery_app:celery_app worker --beat --loglevel=info
-#     env_file:
-#       - .env
-#     volumes:
-      # - ./app/src/:/app/src/
-      # - ./downloads:/downloads
-#     environment:
-#       - QBITTORRENT_HOST=http://qbittorrent:8080
-#     networks:
-#       - app-network
-#     depends_on:
-#       redis:
-#         condition: service_healthy
-#     restart: always
-#     tty: true
-
-#   redis: # Message queue for Celery
-#     container_name: redis
-#     build:
-#       context: ./redis
-#       dockerfile: Dockerfile
-#     ports:
-#       - 6380:6380
-#     networks:
-#       - app-network
-#     healthcheck:
-#       test: ["CMD", "redis-cli", "ping"]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 5
-#     restart: unless-stopped
-#     tty: true
-
-# volumes:
-#   postgres_data:
-#   downloads:
-
-# networks:
-#   app-network:
-#     driver: bridge
+ 

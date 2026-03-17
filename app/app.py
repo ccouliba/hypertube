@@ -1,11 +1,18 @@
+import os
 from flask import (Flask, jsonify)
+from flask_smorest import Api
+from flask_migrate import Migrate
+from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
 from app.db.base import flask_env
 from app.db.session import db
-from app.core.security import define_CORS
+from app.core.configs import APP_CONFIG
+from app.core.security import (define_CORS, limiter)
 from app.core.errors import (
     APIError,
-    handle_api_error as api_error
+    handle_api_error as api_error,
+    handle_http_exception as http_error,
+    handle_unhandled_exception as unhandled_error,
 )
 from app.api import (
     auth_bp,
@@ -16,7 +23,7 @@ from app.api import (
 
 load_dotenv()
 
-def create_app(config_name:str="dev") -> Flask:
+def create_app(config_name: str = "dev") -> Flask:
     """
     Application Factory Pattern
     Create and configure the Flask application
@@ -25,49 +32,62 @@ def create_app(config_name:str="dev") -> Flask:
     Returns:
         Flask app instance
     """
-    
+
     app: Flask = Flask(__name__)
     app.config.from_object(flask_env.get(config_name, flask_env["default"]))
-    db.init_app(app)
-    define_CORS(app)
-
-    @app.route("/routes", methods=["GET"])
-    def index() -> tuple[dict, int]:
-        return jsonify({
-            "message": "Welcome to Hypertube API",
-            "version": "1.0.0",
-            "endpoints": {
-                "info": "/api/info",
-                "auth": "/api/auth",
-                "search": "/api/search",
-                "video": "/api/video",
+    
+    # OpenAPI / Swagger
+    _oa = APP_CONFIG["openapi"]
+    app.config["API_TITLE"] = _oa["title"]
+    app.config["API_VERSION"] = _oa["version"]
+    app.config["OPENAPI_VERSION"] = _oa["openapi_version"]
+    app.config["OPENAPI_URL_PREFIX"] = _oa["url_prefix"]
+    app.config["OPENAPI_SWAGGER_UI_PATH"] = _oa["swagger_ui_path"]
+    app.config["OPENAPI_SWAGGER_UI_URL"] = _oa["swagger_ui_url"]
+    app.config["API_SPEC_OPTIONS"] = {
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": {
+                    "type": _oa["api_type"],
+                    "scheme": _oa["token_schemes"],
+                    "bearerFormat": _oa["bearer_format"],
+                }
             }
-        }), 200
+        }
+    }
 
+    _migrations_dir: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "migrations")
+    db.init_app(app)
+    Migrate(app, db, directory=_migrations_dir)
+    define_CORS(app)
+    limiter.init_app(app)
+
+    # Built-in routes
     @app.route("/health", methods=["GET"])
     def health() -> tuple[dict, int]:
-        """
-        Health check endpoint for Docker healthcheck
-        """
+        """Health check endpoint for Docker healthcheck"""
         return jsonify({"status": "healthy"}), 200
 
-    app.register_blueprint(info_bp, url_prefix="/api/info")
-    app.register_blueprint(auth_bp, url_prefix="/api/auth")
-    app.register_blueprint(search_bp, url_prefix="/api/search")
-    app.register_blueprint(video_bp, url_prefix="/api/video")
+    # Blueprints (flask-smorest)
+    api: Api = Api(app)
+    api.register_blueprint(info_bp, url_prefix="/api/info")
+    api.register_blueprint(auth_bp, url_prefix="/api/auth")
+    api.register_blueprint(search_bp, url_prefix="/api/search")
+    api.register_blueprint(video_bp, url_prefix="/api/video")
 
     app.register_error_handler(APIError, api_error)
-    
+    app.register_error_handler(HTTPException, http_error)
+    app.register_error_handler(Exception, unhandled_error)
+
     return app
 
 
-from app import app_settings as settings
+app: Flask = create_app(APP_CONFIG["app"]["env"])
 
-app: Flask = create_app(settings.get("ENV_NAME", "dev"))
 
 if __name__ == "__main__":
     app.run(
-        host=settings.get("API_HOST", "127.0.0.1"),
-        port=settings.get("API_PORT", 5000),
-        debug=settings.get("DEBUG", False)
+        host=APP_CONFIG["api"]["host"],
+        port=APP_CONFIG["api"]["port"],
+        debug=APP_CONFIG["debug"]
     )

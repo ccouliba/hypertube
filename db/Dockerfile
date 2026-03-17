@@ -6,7 +6,7 @@ RUN apk add --no-cache \
     postgresql-contrib \
     postgresql-client
 
-COPY init.sql/ /docker-entrypoint-initdb.d/
+COPY sql/ /docker-entrypoint-initdb.d/
 RUN mkdir -p /var/lib/postgresql/backups
 EXPOSE 5432
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \

@@ -96,6 +96,7 @@ class Video(db.Model):
             "download_status": self.download_status.value
                 if self.download_status
                 else "not_downloaded",
+            "downloaded": self.download_status == DownloadStatus.COMPLETED,
             "download_progress": self.download_progress,
             "file_path": self.file_path,
             "content_type": self.content_type.value

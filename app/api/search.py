@@ -1,67 +1,45 @@
 """Search API routes"""
-from flask import (
-    Blueprint,
-    request,
-    jsonify,
-    Response
-)
+from flask import jsonify
+from flask_smorest import Blueprint
 from app.core.errors import APIError
+from app.core.errors.messages import ERROR_MESSAGES
 from app.api.decorators.require_auth import require_auth
 from app.services import SearchService
 from app.services.search import providers_settings
+from app.schemas import SearchQuerySchema
 
-search_bp: Blueprint = Blueprint("search", __name__)
+search_bp: Blueprint = Blueprint(
+    "search",
+    __name__,
+    description="Search movies and TV shows from external providers",
+)
+
 YTS_NAME: str = providers_settings["YTS_NAME"]
 EZTV_NAME: str = providers_settings["EZTV_NAME"]
-MAX_PER_PAGE: int = providers_settings["RESULTS_MAX_PER_PAGE"]
-MAX_TOTAL: int = providers_settings["RESULTS_TOTAL_RESULTS"]
-
 search_service: SearchService = SearchService()
 
 
 @search_bp.route("/", methods=["GET"])
+@search_bp.arguments(SearchQuerySchema, location="query")
+@search_bp.doc(security=[{"BearerAuth": []}])
 @require_auth
-def search_videos() -> tuple[Response, int]:
+def search_videos(q: dict) -> tuple:
     """
-    Search movies by title from local database and external sources
-    If no query provided, returns popular movies and TV shows
-    ---
-    GET /api/search?query=inception (search)
-    GET /api/search (popular content)
-    Optional: page, limit for pagination
+    Search movies and TV shows.
+    If no query is provided, returns popular content.
     """
-    query: str = request.args.get("query", "").strip()
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-        limit = min(MAX_TOTAL, max(1, int(request.args.get("limit", MAX_PER_PAGE))))
-    except (ValueError, TypeError):
-        raise APIError(
-            400,
-            "Invalid pagination parameters"
-        )
+    query: str = q.get("query", "").strip()
     if query and len(query) < 2:
-        raise APIError(
-            400,
-            "Search query must be at least 2 characters"
-        )
-    results: dict = search_service.unified_search(query, page, limit)
-    return jsonify(results), 200
+        raise APIError(400, ERROR_MESSAGES["QUERY_TOO_SHORT"])
+    return jsonify(search_service.unified_search(query, q["page"], q["limit"])), 200
 
 
 @search_bp.route("/providers", methods=["GET"])
-def get_providers() -> tuple[Response, int]:
-    """Get list of available search providers"""
+def get_providers() -> tuple:
+    """Get the list of active search providers"""
     return jsonify({
         "providers": [
-            {
-                "name": YTS_NAME,
-                "description": "HQ movies torrents",
-                "status": "active"
-            },
-            {
-                "name": EZTV_NAME,
-                "description": "TV Shows torrents",
-                "status": "active"
-            }
+            {"name": YTS_NAME, "description": "HQ movies torrents", "status": "active"},
+            {"name": EZTV_NAME, "description": "TV Shows torrents", "status": "active"},
         ]
     }), 200

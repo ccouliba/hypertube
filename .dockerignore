@@ -1,0 +1,16 @@
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.venv/
+app/db/migrations/versions/
+front/node_modules/
+front/dist/
+.env
+.env.*
+downloads/
+qbittorrent/
+.git/
+.gitignore
+.vscode/
+**/*.md
+tests/

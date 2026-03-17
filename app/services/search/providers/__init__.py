@@ -1,19 +1,12 @@
-# """Search providers package initialization
+"""Search providers — base class and all provider implementations"""
+from app.services.search.providers.base import Provider
+from app.services.search.providers.YTS_provider import YTSProvider
+from app.services.search.providers.EZTV_provider import EZTVProvider
+from app.services.search.providers.TMDb_provider import TMDbProvider
 
-# Provides:
-# - Base Provider class
-# - YTS Provider and a singleton instance
-# - EZTV Provider and a singleton instance
-# - TMDb Provider and a singleton instance
-# """
-# from app.services.search.providers.base import Provider
-# from app.services.search.providers.YTS_provider import YTS_Provider
-# from app.services.search.providers.EZTV_provider import EZTV_Provider
-# from app.services.search.providers.TMDb_provider import TMDbProvider
-
-# __all__ = [
-#     "Provider",
-#     "TMDbProvider",
-#     "YTS_Provider",
-#     "EZTV_Provider",
-# ]
+__all__ = [
+    "Provider",
+    "TMDbProvider",
+    "YTSProvider",
+    "EZTVProvider",
+]

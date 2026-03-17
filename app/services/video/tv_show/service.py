@@ -12,6 +12,3 @@ class TVShowService(VideoService):
     
     def get_content_type(self) -> ContentType:
         return ContentType.TV_SHOW
-
-
-TVShow_Service: TVShowService = TVShowService()

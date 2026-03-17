@@ -5,22 +5,34 @@ Provides:
 - Popular content discovery with DB enrichment
 - Result pagination and sorting
 """
-from app.services.video.models import Video
+import json
+import logging
+import redis as _redis_lib
+from app.services.video.models import (Video, DownloadStatus)
 from app.services.video.movie.service import MovieService
 from app.services.video.tv_show.service import TVShowService
 from app.services.search.registry import provider_registry as Registry
-from app.services.search.settings import providers_settings
+from app.core.configs import PROVIDERS_CONFIG, REDIS_CONFIG
 
-MAX_TOTAL: int = providers_settings["RESULTS_TOTAL_RESULTS"]
+LOGGER = logging.getLogger(__name__)
+MAX_TOTAL: int = int(PROVIDERS_CONFIG["pagination"]["max_total_results"])
+_POPULAR_CACHE_KEY: str = "hypertube:popular"
+_POPULAR_CACHE_TTL: int = int(PROVIDERS_CONFIG["cache"]["ttl"])
+_cache = _redis_lib.Redis.from_url(
+    REDIS_CONFIG["base_url"] + str(REDIS_CONFIG["db"]["search_cache"]),  # DB 4: search popular cache
+    decode_responses=True,
+    socket_connect_timeout=2,
+)
 
 
 class SearchService:
     """Service for video search across local DB and external providers"""
     
     def __init__(self):
-        self.movie_service = MovieService()
-        self.tvshow_service = TVShowService()
-        self.provider_registry = Registry.get_instance()
+        self.movie_service: MovieService = MovieService()
+        self.tvshow_service: TVShowService = TVShowService()
+        self.provider_registry = Registry
+        LOGGER.info(f"{self.__class__.__name__}: initialized")
     
     def _find_video_in_db(
         self,
@@ -30,7 +42,7 @@ class SearchService:
         Find a video in DB by torrent hash (primary) or title (fallback)
         Returns the Video object if found, None otherwise
         """
-        service = (
+        service: MovieService | TVShowService = (
             self.movie_service 
             if external_result.get("content_type") == "movie"
             else self.tvshow_service
@@ -40,7 +52,7 @@ class SearchService:
                 if torrent_hash := torrent.get("hash"):
                     if video := service.get_by_torrent_hash(torrent_hash):
                         return video
-        videos = service.dao.get_by_title(external_result["title"])
+        videos: list[Video] = service.dao.get_by_title(external_result["title"])
         return videos[0] if videos else None
         
     def get_popular(
@@ -52,16 +64,38 @@ class SearchService:
         Get popular movies and TV shows separately
         This ensures equal distribution between movies and TV shows
         """
-        movies_raw = self.provider_registry.get_movies_only(
-            sort_by="rating",
-            order="desc",
-            limit=limit * 2  # Fetch more to account for pagination
-        )
-        tvshows_raw = self.provider_registry.get_tvshows_only(
-            sort_by="download_count",
-            order="desc",
-            limit=limit * 2
-        )
+        movies_raw: list[dict]
+        tvshows_raw: list[dict]
+        try:
+            cached = _cache.get(_POPULAR_CACHE_KEY)
+        except Exception:
+            cached = None
+        if cached:
+            LOGGER.debug("get_popular: cache hit")
+            payload = json.loads(cached)
+            movies_raw = payload["movies"]
+            tvshows_raw = payload["tv_shows"]
+        else:
+            LOGGER.debug("get_popular: cache miss — fetching from providers")
+            movies_raw = self.provider_registry.get_movies_only(
+                sort_by="rating",
+                order="desc",
+                limit=limit * 2  # Fetch more to account for pagination
+            )
+            tvshows_raw = self.provider_registry.get_tvshows_only(
+                sort_by="download_count",
+                order="desc",
+                limit=limit * 2
+            )
+            try:
+                _cache.setex(
+                    _POPULAR_CACHE_KEY,
+                    _POPULAR_CACHE_TTL,
+                    json.dumps({"movies": movies_raw, "tv_shows": tvshows_raw}),
+                )
+                LOGGER.debug("get_popular: results cached (TTL=%ds)", _POPULAR_CACHE_TTL)
+            except Exception as exc:
+                LOGGER.warning("get_popular: could not write to cache: %s", exc)
         for result in movies_raw:
             if video := self._find_video_in_db(result):
                 self._enrich_with_db_data(result, video)
@@ -106,7 +140,7 @@ class SearchService:
         """Enrich external result with local DB information"""
         result.update({
             "id": video.id,
-            "downloaded": True,
+            "downloaded": video.download_status == DownloadStatus.COMPLETED,
             "download_status": video.download_status.value if hasattr(video.download_status, 'value') else str(video.download_status),
             "download_progress": video.download_progress,
             "file_path": video.file_path,
@@ -121,9 +155,9 @@ class SearchService:
         limit: int
     ) -> dict:
         """Helper method to paginate a list of results"""
-        total = len(results)
-        start = (page - 1) * limit
-        end = start + limit
+        total: int = len(results)
+        start: int = (page - 1) * limit
+        end: int = start + limit
         return {
             "results": results[start:end],
             "total_results": total,
@@ -148,16 +182,16 @@ class SearchService:
         """
         if not query or query.strip() == "":
             return self.get_popular(page, limit)
-        # Cap total results at configured maximum (20)
-        fetch_limit = min(MAX_TOTAL, limit * 4)
-        external_data = self.provider_registry.search_all(
+        LOGGER.info(f"SearchService: Search query='{query}' page={page} limit={limit}")
+        fetch_limit: int = min(MAX_TOTAL, limit * 4)
+        external_data: dict = self.provider_registry.search_all(
             query, 
             sort_by="rating", 
             order="desc", 
             page=1, 
             limit=fetch_limit
         )
-        results = external_data["results"]
+        results: list[dict] = external_data["results"]
         for result in results:
             if video := self._find_video_in_db(result):
                 self._enrich_with_db_data(result, video)
@@ -187,6 +221,3 @@ class SearchService:
             "limit": limit,
             "query": query
         }
-
-
-Search_Service: SearchService = SearchService()

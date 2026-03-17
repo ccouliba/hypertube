@@ -1,27 +1,70 @@
-# Logs
-logs
+# Secrets and environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
 *.log
+
+# Node / Front
+node_modules/
+dist/
+dist-ssr/
+*.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Generated - do NOT commit
+front/src/types/api.d.ts
 
-# Editor directories and files
+# Docker volumes
+downloads/
+postgres_data/
+
+# qBittorrent auto-generated runtime files (keep qBittorrent.conf)
+qbittorrent/config/qBittorrent/BT_backup/
+qbittorrent/config/qBittorrent/GeoDB/
+qbittorrent/config/qBittorrent/logs/
+qbittorrent/config/qBittorrent/rss/
+qbittorrent/config/qBittorrent/qBittorrent-data.conf
+qbittorrent/config/qBittorrent/categories.json
+qbittorrent/config/qBittorrent/watched_folders.json
+qbittorrent/config/qBittorrent/lockfile
+qbittorrent/config/qBittorrent/ipc-socket
+
+# Artifact files (created by malformed docker cp commands)
+app:
+results:
+transport:
+
+# Editors
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-.env
-.venv
+# OS
+.DS_Store
+Thumbs.db

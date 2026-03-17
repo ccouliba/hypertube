@@ -1,5 +1,11 @@
+import logging
+from typing import Optional
+from sqlalchemy.exc import SQLAlchemyError
 from app.db.session import db
-from app.services.auth.models import User
+from app.services.auth.models import User, RefreshToken
+from app.core.errors.handlers import APIError
+
+LOGGER: logging.Logger = logging.getLogger(__name__)
 
 class UserDAO:
     """
@@ -31,11 +37,16 @@ class UserDAO:
         )
         user.set_password(password)
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("UserDAO.create: DB error")
+            raise APIError(500, "Database error")
         return user
        
     @staticmethod
-    def authenticate(username: str, password: str) -> User | None:
+    def authenticate(username: str, password: str) -> Optional[User]:
         """
         Authenticate a user
         Args:
@@ -44,13 +55,13 @@ class UserDAO:
         Returns:
             User if authentication successful, None otherwise
         """
-        user: User | None = UserDAO.get_by_username(username)
+        user: Optional[User] = UserDAO.get_by_username(username)
         if user and user.check_password(password):
             return user
         return None    
 
     @staticmethod
-    def get_all() -> list[User]: # | None:
+    def get_all() -> list[User]:
         """
         Get all users
         Returns:
@@ -59,7 +70,7 @@ class UserDAO:
         return User.query.all()
     
     @staticmethod
-    def get_by_id(user_id: int) -> User | None:
+    def get_by_id(user_id: int) -> Optional[User]:
         """
         Get a user by ID
         Args:
@@ -70,7 +81,7 @@ class UserDAO:
         return User.query.get(user_id)
     
     @staticmethod
-    def get_by_username(username: str) -> User | None:
+    def get_by_username(username: str) -> Optional[User]:
         """
         Get a user by username
         Args:
@@ -81,7 +92,7 @@ class UserDAO:
         return User.query.filter_by(username=username).first()
     
     @staticmethod
-    def get_by_email(email: str) -> User | None:
+    def get_by_email(email: str) -> Optional[User]:
         """
         Get a user by email
         Args:
@@ -122,7 +133,12 @@ class UserDAO:
         Returns:
             User: Updated user
         """
-        db.session.commit()
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("UserDAO.update: DB error")
+            raise APIError(500, "Database error")
         return user
     
     @staticmethod
@@ -133,4 +149,54 @@ class UserDAO:
             user: User to delete
         """
         db.session.delete(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("UserDAO.delete: DB error")
+            raise APIError(500, "Database error")
+
+
+class RefreshTokenDAO:
+    """DAO for refresh token persistence — rotation + revocation"""
+
+    @staticmethod
+    def create(user_id: int, expires_days: int) -> tuple[RefreshToken, str]:
+        """Persist a new refresh token and return the (model, raw_token) pair"""
+        token, raw = RefreshToken.generate(user_id, expires_days)
+        db.session.add(token)
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("RefreshTokenDAO.create: DB error")
+            raise APIError(500, "Database error")
+        return token, raw
+
+    @staticmethod
+    def get_by_raw(raw_token: str) -> Optional[RefreshToken]:
+        """Lookup a token by its raw value (hashed for comparison)"""
+        token_hash = RefreshToken.hash_token(raw_token)
+        return RefreshToken.query.filter_by(token_hash=token_hash, revoked=False).first()
+
+    @staticmethod
+    def revoke(token: RefreshToken) -> None:
+        """Mark a single token as revoked"""
+        token.revoked = True
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("RefreshTokenDAO.revoke: DB error")
+            raise APIError(500, "Database error")
+
+    @staticmethod
+    def revoke_all_for_user(user_id: int) -> None:
+        """Revoke every active refresh token for a user (e.g. password change, suspicious activity)"""
+        RefreshToken.query.filter_by(user_id=user_id, revoked=False).update({"revoked": True})
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("RefreshTokenDAO.revoke_all_for_user: DB error")
+            raise APIError(500, "Database error")

@@ -1,14 +1,18 @@
 """Abstract Video DAO - Base data access for all video content"""
 import os
+import logging
 from typing import (Optional, Type)
 from datetime import (datetime, timedelta)
 from abc import ABC
+from sqlalchemy.exc import SQLAlchemyError
 from app.db.session import db
 from app.services.video.models import (
     Video,
     DownloadStatus
 )
+from app.core.errors.handlers import APIError
 
+LOGGER: logging.Logger = logging.getLogger(__name__)
 
 class VideoDAO(ABC):
     """Abstract DAO providing common operations for video content"""
@@ -31,7 +35,12 @@ class VideoDAO(ABC):
         """
         video: Video = self.model_class(**kwargs)
         db.session.add(video)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("VideoDAO.create: DB error")
+            raise APIError(500, "Database error")
         return video
 
     def get_by_id(self, video_id: int) -> Optional[Video]:
@@ -66,7 +75,12 @@ class VideoDAO(ABC):
         for key, value in kwargs.items():
             if hasattr(video, key):
                 setattr(video, key, value)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("VideoDAO.update: DB error")
+            raise APIError(500, "Database error")
         return video
     
     def delete(self, video: Video) -> None:
@@ -76,7 +90,12 @@ class VideoDAO(ABC):
             video: Video instance to delete
         """
         db.session.delete(video)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("VideoDAO.delete: DB error")
+            raise APIError(500, "Database error")
     
     def get_downloaded(self) -> list[Video]:
         """Get all completed downloads"""
@@ -101,13 +120,17 @@ class VideoDAO(ABC):
         ).all()
         count: int = 0
         for video in old_videos:
-            # Delete file from disk if exists
             if video.file_path and os.path.exists(video.file_path):
                 try:
                     os.remove(video.file_path)
-                except Exception as e:
-                    print(f"Error deleting file {video.file_path}: {e}")
+                except OSError as e:
+                    LOGGER.warning(f"VideoDAO.cleanup_old_videos: could not delete file {video.file_path}: {e}")
             db.session.delete(video)
             count += 1
-        db.session.commit()
+        try:
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            LOGGER.exception("VideoDAO.cleanup_old_videos: DB error")
+            raise APIError(500, "Database error")
         return count

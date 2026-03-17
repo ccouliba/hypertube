@@ -16,9 +16,20 @@ until PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c 
 done
 
 echo "✅ Database is ready!"
-echo "🔧 Initializing database schema..."
-cd /
-python -m app.db.init_db
+
+export FLASK_APP=app
+MIGRATION_DIR="/app/db/migrations"
+VERSIONS_DIR="$MIGRATION_DIR/versions"
+
+if [ -d "$VERSIONS_DIR" ] && [ -n "$(ls -A $VERSIONS_DIR 2>/dev/null)" ]; then
+  echo "🔧 Applying database migrations..."
+  flask db upgrade --directory "$MIGRATION_DIR"
+else
+  echo "🔧 No migration files found — initializing database schema via create_all..."
+  cd /
+  python -m app.db.init_db
+fi
 
 echo "🚀 Starting Flask application..."
+cd /
 exec python -m app.app

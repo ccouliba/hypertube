@@ -2,8 +2,9 @@
 import jwt
 from functools import wraps
 from flask import (request, g)
-from app.services.auth.settings import auth_settings as settings
 from app.core.errors import APIError
+from app.core.security.jwt_gen import decode_token
+
 
 def require_auth(f):
     """Decorator to ensure request has valid JWT token"""
@@ -16,26 +17,18 @@ def require_auth(f):
                 status_code=401,
                 message="Missing authorization header"
             )
-        try: # Format: "Bearer <token>"
-            scheme, token = auth_header.split()
-            if scheme.lower() != "bearer":
+        try:
+            parts: list[str] = auth_header.split()
+            if len(parts) != 2 or parts[0].lower() != "bearer":
                 raise APIError(
                     status_code=401,
-                    message="Invalid authorization scheme"
+                    message="Invalid authorization header format"
                 )
-            secret_key: str = settings.get("SECRET_KEY", "default_secret")
-            payload = jwt.decode(
-                token,
-                secret_key,
-                algorithms=[settings.get("ALGORITHM", "HS256")]
-            )
+            payload: dict = decode_token(parts[1])
             g.user_id = payload.get("user_id")
             g.username = payload.get("username")
-        except ValueError:
-            raise APIError(
-                status_code=401,
-                message="Invalid authorization header format"
-            )
+        except APIError:
+            raise
         except jwt.ExpiredSignatureError:
             raise APIError(
                 status_code=401,
@@ -46,5 +39,11 @@ def require_auth(f):
                 status_code=401,
                 message="Invalid token"
             )
+        except RuntimeError as e:
+            raise APIError(
+                status_code=500,
+                message=str(e)
+            )
         return f(*args, **kwargs)
+    
     return decorated_function

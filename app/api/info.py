@@ -1,23 +1,33 @@
 """
 Info API routes
-Public endpoints for frontend configuration
+Public entry point — exposes API metadata and OpenAPI documentation links.
 """
-from flask import (Blueprint, jsonify, Response)
-from app.api.settings import app_settings as settings
+from flask import jsonify, Response
+from flask_smorest import Blueprint
+from app.core.configs import APP_CONFIG, PROVIDERS_CONFIG
 
-info_bp: Blueprint = Blueprint("info", __name__)
+info_bp: Blueprint = Blueprint(
+    "info",
+    __name__,
+    description="API metadata and documentation entry point",
+)
 
 
 @info_bp.route("/", methods=["GET"])
 def get_public_config() -> tuple[Response, int]:
     """
-    Get public configuration for frontend
-    No authentication required - only public URLs
-    ---
-    GET /api/info
+    API entry point — public metadata + links to OpenAPI spec and Swagger UI.
+    No authentication required.
     """
+    base_api: str = APP_CONFIG["app"]["url"] + "/api"
+    pagination = PROVIDERS_CONFIG["pagination"]
     return jsonify({
-        "apiUrl": settings.get("API_URL", "http://localhost/") + "api",
-        "version": settings.get("VERSION", "1.0.0"),
-        "environment": settings.get("ENV", "dev")
+        "version": APP_CONFIG["version"],
+        "environment": APP_CONFIG["app"]["env"],
+        "docs": f"{base_api}/docs",
+        "openapi_spec": f"{base_api}/openapi.json",
+        "pagination": {
+            "max_total_results": pagination["max_total_results"],
+            "page_size": 20,
+        },
     }), 200

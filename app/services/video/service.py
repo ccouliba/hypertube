@@ -1,6 +1,6 @@
 """Abstract Video Service - Base business logic for video content"""
-import os
-from flask import (Response, send_file)
+import logging
+from flask import Response
 from abc import ABC, abstractmethod
 from typing import Optional
 from app.services.video.models import (
@@ -9,16 +9,22 @@ from app.services.video.models import (
     DownloadStatus,
 )
 from app.services.video.dao import VideoDAO
-from app.services.torrent.service import TorrentManager
-from app.tasks.downloads import start_torrent_download
+from app.services.streaming import StreamingService
+from app.services.torrent import TorrentService, torrent_service as _torrent_service
+from app.core.errors.handlers import APIError
+from app.core.errors.messages import ERROR_MESSAGES
+
+LOGGER = logging.getLogger(__name__)
 
 
 class VideoService(ABC):
     """Abstract service providing common operations for video content"""
 
     def __init__(self, dao: VideoDAO):
-        self.dao = dao
-        self.torrent_manager = TorrentManager
+        self.dao: VideoDAO = dao
+        self.torrent_manager: TorrentService = _torrent_service
+        self.streaming: StreamingService = StreamingService()
+        LOGGER.info(f"{self.__class__.__name__}: initialized")
     
     @abstractmethod
     def get_content_type(self) -> ContentType:
@@ -86,10 +92,10 @@ class VideoService(ABC):
         Returns:
             Updated video
         """
-        video = self.dao.get_by_id(video_id)
+        video: Optional[Video] = self.dao.get_by_id(video_id)
         if not video:
-            raise ValueError(f"Video {video_id} not found")
-        update_data = {"download_progress": progress}
+            raise APIError(404, ERROR_MESSAGES["VIDEO_NOT_FOUND"])
+        update_data: dict = {"download_progress": progress}
         if status:
             update_data["download_status"] = status
         return self.dao.update(video, **update_data)
@@ -107,9 +113,9 @@ class VideoService(ABC):
         Returns:
             Updated video
         """
-        video = self.dao.get_by_id(video_id)
+        video: Optional[Video] = self.dao.get_by_id(video_id)
         if not video:
-            raise ValueError(f"Video {video_id} not found")
+            raise APIError(404, ERROR_MESSAGES["VIDEO_NOT_FOUND"])
         return self.dao.update(
             video,
             file_path=file_path,
@@ -119,18 +125,21 @@ class VideoService(ABC):
     
     def update(self, video_id: int, data: dict) -> Optional[dict]:
         """Update a video"""
-        video = self.dao.get_by_id(video_id)
+        video: Optional[Video] = self.dao.get_by_id(video_id)
         if not video:
             return None
-        updated_video = self.dao.update(video, **data)
+        updated_video: Optional[Video] = self.dao.update(video, **data)
         return updated_video.to_dict() if updated_video else None
     
     def delete(self, video_id: int) -> bool:
         """Delete a video"""
-        video = self.dao.get_by_id(video_id)
+        video: Optional[Video] = self.dao.get_by_id(video_id)
         if not video:
+            LOGGER.warning(f"{self.__class__.__name__}: Delete: video_id={video_id} not found (already deleted?)")
             return False
-        return self.dao.delete(video)
+        LOGGER.info(f"{self.__class__.__name__}: Deleting video: video_id={video_id} title='{video.title}'")
+        self.dao.delete(video)
+        return True
     
     def get_downloaded(self) -> list[Video]:
         """Get all downloaded videos"""
@@ -169,14 +178,22 @@ class VideoService(ABC):
             "content_type": self.get_content_type(),
             "last_watched": None
         }
-        print(f"Creating video for download: {video_data['title']} - {video_data['download_status']}")
         video: Video = self.dao.create(**video_data)
-        task = start_torrent_download.delay(
-            data.get("torrent_url"),
-            data.get("torrent_hash"),
-            video.id,
-            self.get_content_type().value
-        )
+        LOGGER.info(f"{self.__class__.__name__}: Starting download: content_type={self.get_content_type().value} title='{video.title}' hash={data.get('torrent_hash')} video_id={video.id}")
+
+        from app.tasks.downloads import start_torrent_download
+
+        try:
+            task = start_torrent_download.delay(
+                data.get("torrent_url"),
+                data.get("torrent_hash"),
+                video.id,
+                self.get_content_type().value
+            )
+        except Exception as e:
+            LOGGER.exception("%s: Failed to enqueue download task", self.__class__.__name__)
+            self.dao.delete(video)
+            raise APIError(503, ERROR_MESSAGES["SERVICE_UNAVAILABLE"])
         return {
             "message": "Download started",
             "video_id": video.id,
@@ -203,7 +220,7 @@ class VideoService(ABC):
         if not video or not video.selected_torrent_hash:
             return None
         success: bool = self.torrent_manager.pause_download(video.selected_torrent_hash)
-        print(f"Pausing download for video ID {video_id}: {'success' if success else 'failed'}")
+        LOGGER.debug("%s: pause_download video_id=%s %s", self.__class__.__name__, video_id, "ok" if success else "failed")
         if success:
             self.dao.update(video, download_status=DownloadStatus.PAUSED)
         return {"message": "Download paused" if success else "Failed to pause", "success": success}
@@ -213,25 +230,44 @@ class VideoService(ABC):
         video: Optional[Video] = self.dao.get_by_id(video_id)
         if not video:
             return None
-        success = self.torrent_manager.resume_download(video.selected_torrent_hash)
+        success: bool = self.torrent_manager.resume_download(video.selected_torrent_hash)
         if success:
             self.dao.update(video, download_status=DownloadStatus.DOWNLOADING)
         return {
-            "message": "Download resumed"
-                if success 
-                    else "Failed to resume", "success": success
+            "message": "Download resumed" if success else "Failed to resume",
+            "success": success,
         }
     
-    def stream_video(self, video_id: int) -> Optional[Response]:
-        """Stream a downloaded video"""
+    def get_file_path_for_streaming(self, video_id: int) -> str:
+        """
+        Validate that a video is ready for streaming and return its absolute file path.
+        Raises:
+            APIError 404: video not found, not in a streamable state, or file path unresolvable.
+        """
         video: Optional[Video] = self.dao.get_by_id(video_id)
-        if not video or video.download_status != DownloadStatus.COMPLETED or not video.file_path:
-            return None
-        if not os.path.exists(video.file_path):
-            return None
-        return send_file(
-            video.file_path,
-            mimetype="video/mp4",
-            as_attachment=False,
-            download_name=f"{video.title}.mp4"
-        )
+        if not video:
+            raise APIError(404, ERROR_MESSAGES["VIDEO_NOT_FOUND"])
+        streamable_statuses: tuple = (DownloadStatus.DOWNLOADING, DownloadStatus.COMPLETED)
+        if video.download_status not in streamable_statuses:
+            raise APIError(404, ERROR_MESSAGES["VIDEO_NOT_STREAMABLE"])
+        file_path: Optional[str] = video.file_path
+        if not file_path and video.selected_torrent_hash:
+            file_path = self.torrent_manager.get_video_file(video.selected_torrent_hash)
+        if not file_path:
+            raise APIError(404, ERROR_MESSAGES["VIDEO_FILE_NOT_FOUND"])
+        return file_path
+
+    def stream_video(
+        self,
+        video_id: int,
+        range_header: Optional[str] = None
+    ) -> Response:
+        """
+        Stream a video file via Flask (FFmpeg fallback for non-native formats).
+        For native formats (mp4/webm/ogg), prefer the nginx X-Accel-Redirect path.
+        Raises:
+            APIError 404: video not found, not ready, or file missing.
+            APIError 503: not enough data downloaded yet.
+        """
+        file_path: str = self.get_file_path_for_streaming(video_id)
+        return self.streaming.stream(file_path, range_header)
