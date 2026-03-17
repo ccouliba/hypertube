@@ -34,10 +34,13 @@ class TorrentService:
         """Initialize qBittorrent client with credentials from config"""
         self.qb: Client = Client(
             host=HOST,
+            username=USERNAME,
+            password=PASSWORD,
             REQUESTS_ARGS={"timeout": 10},
         )
         try:
-            self.qb.app_version()  # Test connection
+            self.qb.auth_log_in()
+            self.qb.app_version() # Test connection
             LOGGER.info("TorrentService: initialized and connected to qBittorrent")
         except Exception as e:
             LOGGER.warning(f"TorrentService: initial connection failed: {e}")

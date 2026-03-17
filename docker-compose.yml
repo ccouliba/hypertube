@@ -16,6 +16,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
     
+  qbittorrent:
+    image: linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+    volumes:
+      - ./qbittorrent/config:/config
+      - ./downloads:/downloads
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    tty: true
+
   app:
     container_name: backend
     build:
@@ -26,6 +48,7 @@ services:
     ports:
       - "5000:5000"
     dns:
+      - 127.0.0.11
       - ${DNS_PRIMARY}
       - ${DNS_SECONDARY}
     volumes:
@@ -88,31 +111,6 @@ services:
     restart: unless-stopped
     tty: true
 
-  qbittorrent:
-    image: linuxserver/qbittorrent:latest
-    container_name: qbittorrent
-    env_file:
-      - .env
-    environment:
-      - PUID=${QB_PUID}
-      - PGID=${QB_PGID}
-      - WEBUI_PORT=${QB_WEBUI_PORT}
-      - TZ=${QB_TZ}
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./qbittorrent/config:/config
-      - ./downloads:/downloads
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
-    tty: true
 
   celery-worker:
     container_name: celery-worker
