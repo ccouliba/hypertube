@@ -169,7 +169,7 @@ QBT_CONFIG: dict = {
     "qbittorrent": {
         "host": os.getenv("QBITTORRENT_HOST", "http://qbittorrent:8080"),
         "user": os.getenv("QBITTORRENT_USER", "admin"),
-        "pass": os.getenv("QBITTORRENT_PASS", "secret123"),
+        "pass": os.getenv("QBITTORRENT_PASS"),
         "timeout": int(os.getenv("QB_TIMEOUT", "30")),
     },
     "downloads": {

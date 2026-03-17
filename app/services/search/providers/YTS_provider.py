@@ -1,4 +1,5 @@
 """YTS API provider for movie torrents search"""
+import os
 import requests
 from typing import Optional
 from app.services.search.providers.base import Provider
@@ -46,7 +47,8 @@ class YTSProvider(Provider):
             response: requests.Response = requests.get(
                 LIST_URLS,
                 params=params,
-                timeout=DEFAULT_TIMEOUT
+                timeout=DEFAULT_TIMEOUT,
+                headers={"User-Agent": os.getenv("USER_AGENT", "Mozilla/5.0")}
             )
             response.raise_for_status()
             data = response.json()
