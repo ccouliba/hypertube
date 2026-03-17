@@ -30,49 +30,17 @@ class TorrentService:
     - Torrent removal with optional file deletion
     """
 
-    _banned_until: float = 0.0  # class-level: shared across all instances
-    BAN_RETRY_DELAY: int = 300  # seconds before retrying after a ban (5 min)
-
     def __init__(self) -> None:
         """Initialize qBittorrent client with credentials from config"""
         self.qb: Client = Client(
             host=HOST,
-            username=USERNAME,
-            password=PASSWORD,
             REQUESTS_ARGS={"timeout": 10},
         )
         try:
-            self.qb.auth_log_in()
-            LOGGER.info("TorrentService: initialized and logged in to qBittorrent")
+            self.qb.app_version()  # Test connection
+            LOGGER.info("TorrentService: initialized and connected to qBittorrent")
         except Exception as e:
-            if "banned" in str(e).lower():
-                TorrentService._banned_until = time.time() + TorrentService.BAN_RETRY_DELAY
-                LOGGER.warning(f"TorrentService: IP banned on init — pausing retries for {TorrentService.BAN_RETRY_DELAY}s")
-            else:
-                LOGGER.warning(f"TorrentService: initial login failed (will retry on use): {e}")
-
-    def _ensure_logged_in(self) -> None:
-        """Re-authenticate if the session has expired. No-ops while IP is banned."""
-        now = time.time()
-        if now < TorrentService._banned_until:
-            remaining = int(TorrentService._banned_until - now)
-            raise Exception(f"TorrentService: IP still banned — {remaining}s before next retry")
-        try:
-            self.qb.app_version()
-            return  # session alive
-        except Exception as e:
-            if "banned" in str(e).lower():
-                TorrentService._banned_until = time.time() + TorrentService.BAN_RETRY_DELAY
-                LOGGER.error(f"TorrentService: IP banned by qBittorrent — pausing retries for {TorrentService.BAN_RETRY_DELAY}s")
-                raise
-        LOGGER.info("TorrentService: qBittorrent session lost, re-authenticating")
-        try:
-            self.qb.auth_log_in()
-        except Exception as e:
-            if "banned" in str(e).lower():
-                TorrentService._banned_until = time.time() + TorrentService.BAN_RETRY_DELAY
-                LOGGER.error(f"TorrentService: IP banned by qBittorrent — pausing retries for {TorrentService.BAN_RETRY_DELAY}s")
-            raise
+            LOGGER.warning(f"TorrentService: initial connection failed: {e}")
     
     def start_download(
         self,
@@ -90,7 +58,6 @@ class TorrentService:
             Exception: If download fails to start
         """
         try:
-            self._ensure_logged_in()
             self.qb.torrents_add(
                 urls=torrent_url,
                 save_path=DOWNLOAD_DIR,
@@ -119,7 +86,6 @@ class TorrentService:
             Dict with progress, speeds, peers, etc. or None if not found
         """
         try:
-            self._ensure_logged_in()
             torrents: list = self.qb.torrents_info(torrent_hashes=[torrent_hash])
             if torrents:
                 t = torrents[0]
@@ -151,7 +117,6 @@ class TorrentService:
             True if successful, False otherwise
         """
         try:
-            self._ensure_logged_in()
             self.qb.torrents_pause(torrent_hashes=[torrent_hash])
             LOGGER.info(f"TorrentService: Paused download for {torrent_hash}")
             return True
@@ -168,7 +133,6 @@ class TorrentService:
             True if successful, False otherwise
         """
         try:
-            self._ensure_logged_in()
             self.qb.torrents_resume(torrent_hashes=[torrent_hash])
             LOGGER.info(f"TorrentService: Resumed download for {torrent_hash}")
             return True
@@ -190,7 +154,6 @@ class TorrentService:
             True if successful, False otherwise
         """
         try:
-            self._ensure_logged_in()
             self.qb.torrents_delete(torrent_hashes=[torrent_hash], delete_files=True)
             LOGGER.info(f"TorrentService: Removed torrent {torrent_hash} (delete_files={delete_files})")
             return True
@@ -208,7 +171,6 @@ class TorrentService:
             Full path to the video file or None if not found
         """
         try:
-            self._ensure_logged_in()
             torrents: list = self.qb.torrents_info(torrent_hashes=[torrent_hash])
             if torrents:
                 t = torrents[0]

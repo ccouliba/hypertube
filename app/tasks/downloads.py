@@ -8,7 +8,6 @@ from app.services import MovieService, TVShowService
 from app.tasks.celery_app import celery_app
 from app.core.configs import CELERY_CONFIG
 from app.core.errors.handlers import APIError
-from celery.signals import worker_process_init
 
 logging.basicConfig(level=logging.INFO)
 LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -18,18 +17,6 @@ MONITOR_INTERVAL: int = int(os.getenv("TORRENT_MONITOR_INTERVAL", "5"))
 
 # Extensions the browser plays natively
 _BROWSER_NATIVE: frozenset = frozenset({".mp4", ".webm", ".ogg"})
-
-
-@worker_process_init.connect
-def _reconnect_torrent_service(**kwargs):
-    """Re-authenticate qBittorrent client after Celery prefork.
-    Each forked worker inherits an invalid TCP session — this restores it.
-    """
-    try:
-        torrent_service.qb.auth_log_in()
-        LOGGER.info("TorrentService: post-fork re-authentication successful")
-    except Exception as e:
-        LOGGER.warning(f"TorrentService: post-fork re-login failed: {e}")
 
 
 @celery_app.task(name="tasks.start_torrent_download", bind=True)
