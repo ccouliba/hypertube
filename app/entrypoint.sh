@@ -30,6 +30,6 @@ else
   python -m app.db.init_db
 fi
 
-echo "🚀 Starting Flask application..."
+echo "🚀 Starting Flask application with Gunicorn..."
 cd /
-exec python -m app.app
+exec gunicorn --bind 0.0.0.0:5000 --workers 4 "app.app:create_app()"

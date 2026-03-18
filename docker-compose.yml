@@ -8,7 +8,7 @@ services:
     ports:
       - "3000:80"
     volumes:
-      - ./downloads:/downloads:ro
+      - downloads_data:/downloads:ro
     networks:
       - app-network
     depends_on:
@@ -25,8 +25,9 @@ services:
       - "8080:8080"
       - "6881:6881"
     volumes:
-      - ./qbittorrent/config:/config
-      - ./downloads:/downloads
+      - ./qbittorrent/config/qBittorrent/qBittorrent.conf:/config/qBittorrent/qBittorrent.conf:ro
+      - qbittorrent_cache:/config
+      - downloads_data:/downloads
     networks:
       - app-network
     healthcheck:
@@ -48,12 +49,12 @@ services:
     ports:
       - "5000:5000"
     dns:
-      - 127.0.0.11
+      # - 127.0.0.11
       - ${DNS_PRIMARY}
       - ${DNS_SECONDARY}
     volumes:
       - ./app/:/app/
-      - ./downloads:/downloads
+      - downloads_data:/downloads
     networks:
       - app-network
     depends_on:
@@ -125,7 +126,7 @@ services:
       - ${DNS_SECONDARY}
     volumes:
       - ./app:/app
-      - ./downloads:/downloads
+      - downloads_data:/downloads
     networks:
       - app-network
     depends_on:
@@ -140,7 +141,8 @@ services:
 
 volumes:
   postgres_data:
-  downloads:
+  downloads_data:
+  qbittorrent_cache:
   
 networks:
   app-network:
