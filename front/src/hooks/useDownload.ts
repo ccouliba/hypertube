@@ -32,7 +32,7 @@ export const useDownload = (video: VideoResult) => {
   })
 
   useEffect(() => {
-    if (entry || !hash || !video.id) return
+    if (entry || !video.id) return
     const { download_status: dbStatus } = video
     if (dbStatus === "downloading" || dbStatus === "paused") {
       dispatch(restoreDownload({ hash, contentType: video.content_type, video }))

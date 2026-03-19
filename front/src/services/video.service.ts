@@ -73,6 +73,11 @@ const videoService = {
     apiClient
       .get<VideoListResponse>("/api/video/", { params: { content_type: "all" } })
       .then((r) => r.data),
+
+  getActiveDownloads: (): Promise<VideoListResponse> =>
+    apiClient
+      .get<VideoListResponse>("/api/video/active_downloads", { params: { content_type: "all" } })
+      .then((r) => r.data),
 }
 
 export default videoService
