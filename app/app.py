@@ -85,13 +85,6 @@ def create_app(config_name: str = "dev") -> Flask:
         app.register_error_handler(HTTPException, http_error)
         app.register_error_handler(Exception, unhandled_error)
 
-
-    @app.route("/health", methods=["GET"])
-    def health() -> tuple[dict, int]:
-        """Health check endpoint for Docker healthcheck"""
-        return jsonify({"status": "healthy"}), 200
-
-
     app: Flask = Flask(__name__)
     app.config.from_object(flask_env.get(config_name, flask_env["default"]))
     _oa: dict = APP_CONFIG["openapi"]
@@ -104,11 +97,18 @@ def create_app(config_name: str = "dev") -> Flask:
     api: Api = Api(app)
     _register_blueprints(api)
     _register_error_handlers(app)
+
+    @app.route("/health", methods=["GET"])
+    def health() -> tuple[dict, int]:
+        """Health check endpoint for Docker healthcheck"""
+        return jsonify({"status": "healthy"}), 200
+
     return app
 
 
+app: Flask = create_app(APP_CONFIG["app"]["env"])
+
 if __name__ == "__main__":
-    app: Flask = create_app(APP_CONFIG["app"]["env"])
     app.run(
         host=APP_CONFIG["api"]["host"],
         port=APP_CONFIG["api"]["port"],

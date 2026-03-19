@@ -8,7 +8,7 @@ attempt=0
 until PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; do
   attempt=$((attempt + 1))
   if [ $attempt -ge $max_attempts ]; then
-    echo "❌ Database connection failed after $max_attempts attempts"
+    echo "❌ Database connection failed after [$max_attempts] attempts"
     exit 1
   fi
   echo "⏳ Waiting for database... ($attempt/$max_attempts)"
@@ -30,6 +30,6 @@ else
   python -m app.db.init_db
 fi
 
-echo "🚀 Starting Flask application with Gunicorn..."
+echo "🚀 Starting Flask application with Gunicorn (factory create_app)..."
 cd /
 exec gunicorn --bind 0.0.0.0:5000 --workers 4 "app.app:create_app()"
