@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useEffect, useState } from "react"
 import styled from "styled-components"
 import { useAppDispatch, useAppSelector } from "@/hooks/useAppStore"
 import {
@@ -6,7 +6,11 @@ import {
   resumeDownload,
   deleteVideo,
 } from "@/store/slices/downloadSlice"
+import { restoreDownload } from "@/store/slices/downloadSlice"
+import videoService from "@/services/video.service"
+import VideoModal from "./VideoModal"
 import type { DownloadEntry } from "@/store/slices/downloadSlice"
+
 
 const DownloadsTable: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -15,6 +19,25 @@ const DownloadsTable: React.FC = () => {
       (e) => e.status !== "completed" && e.status !== "error"
     )
   )
+  const [modalVideo, setModalVideo] = useState<DownloadEntry["video"] | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    videoService
+      .getActiveDownloads()
+      .then(({ videos }) => {
+        if (!mounted) return
+        videos.forEach((v) => {
+          const hash = v.torrents?.[0]?.hash
+          if (!hash) return
+          dispatch(restoreDownload({ hash, contentType: v.content_type, video: v }))
+        })
+      })
+      .catch(() => {
+        /* best-effort restore, ignore errors */
+      })
+    return () => { mounted = false }
+  }, [dispatch])
 
   const handlePause = (e: DownloadEntry) => {
     if (!e.videoId) return
@@ -31,13 +54,19 @@ const DownloadsTable: React.FC = () => {
     dispatch(deleteVideo({ contentType: e.contentType, videoId: e.videoId, hash: e.hash }))
   }
 
+  const handleTitleClick = (video: DownloadEntry["video"]) => setModalVideo(video)
+
   return (
-    <DownloadsTableView
-      entries={entries}
-      onPause={handlePause}
-      onResume={handleResume}
-      onStop={handleStop}
-    />
+    <>
+      <DownloadsTableView
+        entries={entries}
+        onPause={handlePause}
+        onResume={handleResume}
+        onStop={handleStop}
+        onTitleClick={handleTitleClick}
+      />
+      {modalVideo && <VideoModal video={modalVideo} onClose={() => setModalVideo(null)} />}
+    </>
   )
 }
 
@@ -49,6 +78,7 @@ interface DownloadsTableViewProps {
   onPause: (e: DownloadEntry) => void
   onResume: (e: DownloadEntry) => void
   onStop: (e: DownloadEntry) => void
+  onTitleClick: (video: DownloadEntry["video"]) => void
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -62,6 +92,7 @@ export const DownloadsTableView: React.FC<DownloadsTableViewProps> = ({
   onPause,
   onResume,
   onStop,
+  onTitleClick,
 }) => {
   if (entries.length === 0) {
     return (
@@ -88,7 +119,9 @@ export const DownloadsTableView: React.FC<DownloadsTableViewProps> = ({
           {entries.map((entry) => (
             <Row key={entry.hash}>
               <Td>
-                <TitleCell title={entry.video.title}>{entry.video.title}</TitleCell>
+                <TitleButton onClick={() => onTitleClick(entry.video)} title={`Open ${entry.video.title}`}>
+                  {entry.video.title}
+                </TitleButton>
               </Td>
               <Td $center>
                 <StatusBadge $status={entry.status}>
@@ -195,14 +228,22 @@ const Td = styled.td<{ $center?: boolean }>`
   vertical-align: middle;
 `
 
-const TitleCell = styled.span`
+const TitleButton = styled.button`
   display: block;
   font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.text};
+  color: rgb(255, 255, 255);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  cursor: pointer;
+  text-decoration: underline;
+  &:hover { color: rgb(245, 24, 24); }
 `
 
 const StatusBadge = styled.span<{ $status: string }>`
