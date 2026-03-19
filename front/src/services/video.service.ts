@@ -76,7 +76,7 @@ const videoService = {
 
   getActiveDownloads: (): Promise<VideoListResponse> =>
     apiClient
-      .get<VideoListResponse>("/api/video/active_downloads", { params: { content_type: "all" } })
+      .get<VideoListResponse>("/api/video/active-downloads")
       .then((r) => r.data),
 }
 

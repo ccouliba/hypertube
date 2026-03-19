@@ -27,6 +27,8 @@ export interface VideoResult {
   content_type: "movie" | "tv_show"
   torrents: Torrent[]
   provider?: string
+  /** Selected torrent hash persisted in DB (if download started) */
+  selected_torrent_hash?: string
   // DB enrichment fields
   downloaded?: boolean
   download_status?: string

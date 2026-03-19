@@ -28,7 +28,7 @@ const DownloadsTable: React.FC = () => {
       .then(({ videos }) => {
         if (!mounted) return
         videos.forEach((v) => {
-          const hash = v.torrents?.[0]?.hash
+          const hash = v.selected_torrent_hash ?? v.torrents?.[0]?.hash
           if (!hash) return
           dispatch(restoreDownload({ hash, contentType: v.content_type, video: v }))
         })
@@ -243,7 +243,7 @@ const TitleButton = styled.button`
   max-width: 100%;
   cursor: pointer;
   text-decoration: underline;
-  &:hover { color: rgb(245, 24, 24); }
+  &:hover { color: #f5c619; }
 `
 
 const StatusBadge = styled.span<{ $status: string }>`
