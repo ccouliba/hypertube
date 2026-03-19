@@ -112,7 +112,6 @@ services:
     restart: unless-stopped
     tty: true
 
-
   celery-worker:
     container_name: celery-worker
     build:
