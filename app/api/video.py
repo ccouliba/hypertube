@@ -139,6 +139,26 @@ def get_video_stats(q: dict):
     return jsonify(_get_service(content_type).get_statistics()), 200
 
 
+@video_bp.route("/active-downloads", methods=["GET"])
+@video_bp.arguments(OptionalContentTypeQuerySchema, location="query")
+@video_bp.response(200, VideoListResponseSchema)
+@video_bp.doc(security=[{"BearerAuth": []}])
+@require_auth
+def active_downloads(q: dict) -> dict:
+    """Return videos whose downloads are currently active (downloading or paused).
+    This powers the Downloads panel restoration after a full page refresh.
+    """
+    content_type: str = q["content_type"]
+    if content_type == "all":
+        movies: list = movie_service.get_active_downloads()
+        tvshows: list = tvshow_service.get_active_downloads()
+        videos: list[dict] = [v.to_dict() for v in (movies + tvshows)]
+        return {"videos": videos, "total": len(videos)}
+    service: Union[MovieService, TVShowService] = _get_service(content_type)
+    videos: list[dict] = [v.to_dict() for v in service.get_active_downloads()]
+    return {"videos": videos, "total": len(videos), "content_type": content_type}
+
+
 @video_bp.route("/download", methods=["POST"])
 @video_bp.arguments(ContentTypeQuerySchema, location="query")
 @video_bp.arguments(DownloadVideoSchema)
