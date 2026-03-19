@@ -32,53 +32,78 @@ def create_app(config_name: str = "dev") -> Flask:
     Returns:
         Flask app instance
     """
+    MIGRATIONS_DIR: str = os.path.join(os.path.dirname(__file__), "migrations")
+# os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "migrations")
 
-    app: Flask = Flask(__name__)
-    app.config.from_object(flask_env.get(config_name, flask_env["default"]))
-    
-    # OpenAPI / Swagger
-    _oa = APP_CONFIG["openapi"]
-    app.config["API_TITLE"] = _oa["title"]
-    app.config["API_VERSION"] = _oa["version"]
-    app.config["OPENAPI_VERSION"] = _oa["openapi_version"]
-    app.config["OPENAPI_URL_PREFIX"] = _oa["url_prefix"]
-    app.config["OPENAPI_SWAGGER_UI_PATH"] = _oa["swagger_ui_path"]
-    app.config["OPENAPI_SWAGGER_UI_URL"] = _oa["swagger_ui_url"]
-    app.config["API_SPEC_OPTIONS"] = {
-        "components": {
-            "securitySchemes": {
-                "BearerAuth": {
-                    "type": _oa["api_type"],
-                    "scheme": _oa["token_schemes"],
-                    "bearerFormat": _oa["bearer_format"],
+    def _validate_config(config: dict) -> None:
+        """Validate that all required OpenAPI config keys are present"""
+        required_keys = [
+            "title",
+            "version",
+            "openapi_version",
+            "url_prefix",
+            "swagger_ui_path",
+            "swagger_ui_url",
+            "api_type",
+            "token_schemes",
+            "bearer_format"
+        ]
+        missing_keys = [key for key in required_keys if key not in config]
+        if missing_keys:
+            raise ValueError(f"Missing OpenAPI config keys: {', '.join(missing_keys)}")
+
+    def _load_open_api_config(config: dict) -> None:
+        _validate_config(config)
+        app.config["API_TITLE"] = config["title"]
+        app.config["API_VERSION"] = config["version"]
+        app.config["OPENAPI_VERSION"] = config["openapi_version"]
+        app.config["OPENAPI_URL_PREFIX"] = config["url_prefix"]
+        app.config["OPENAPI_SWAGGER_UI_PATH"] = config["swagger_ui_path"]
+        app.config["OPENAPI_SWAGGER_UI_URL"] = config["swagger_ui_url"]
+        app.config["API_SPEC_OPTIONS"] = {
+            "components": {
+                "securitySchemes": {
+                    "BearerAuth": {
+                        "type": config["api_type"],
+                        "scheme": config["token_schemes"],
+                        "bearerFormat": config["bearer_format"],
+                    }
                 }
             }
         }
-    }
+    
+    def _register_blueprints(api: Api) -> None:
+        """Define and register API blueprints via flask-smorest"""
+        api.register_blueprint(info_bp, url_prefix="/api/info")
+        api.register_blueprint(auth_bp, url_prefix="/api/auth")
+        api.register_blueprint(search_bp, url_prefix="/api/search")
+        api.register_blueprint(video_bp, url_prefix="/api/video")
 
-    _migrations_dir: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "migrations")
-    db.init_app(app)
-    Migrate(app, db, directory=_migrations_dir)
-    define_CORS(app)
-    limiter.init_app(app)
+    def _register_error_handlers(app: Flask) -> None:
+        """Define and register global error handlers"""
+        app.register_error_handler(APIError, api_error)
+        app.register_error_handler(HTTPException, http_error)
+        app.register_error_handler(Exception, unhandled_error)
 
-    # Built-in routes
+
     @app.route("/health", methods=["GET"])
     def health() -> tuple[dict, int]:
         """Health check endpoint for Docker healthcheck"""
         return jsonify({"status": "healthy"}), 200
 
-    # Blueprints (flask-smorest)
+
+    app: Flask = Flask(__name__)
+    app.config.from_object(flask_env.get(config_name, flask_env["default"]))
+    _oa: dict = APP_CONFIG["openapi"]
+    _load_open_api_config(_oa)
+    _migrations_dir: str = MIGRATIONS_DIR
+    db.init_app(app)
+    Migrate(app, db, directory=_migrations_dir)
+    define_CORS(app)
+    limiter.init_app(app)
     api: Api = Api(app)
-    api.register_blueprint(info_bp, url_prefix="/api/info")
-    api.register_blueprint(auth_bp, url_prefix="/api/auth")
-    api.register_blueprint(search_bp, url_prefix="/api/search")
-    api.register_blueprint(video_bp, url_prefix="/api/video")
-
-    app.register_error_handler(APIError, api_error)
-    app.register_error_handler(HTTPException, http_error)
-    app.register_error_handler(Exception, unhandled_error)
-
+    _register_blueprints(api)
+    _register_error_handlers(app)
     return app
 
 
