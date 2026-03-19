@@ -148,15 +148,11 @@ def active_downloads(q: dict) -> dict:
     """Return videos whose downloads are currently active (downloading or paused).
     This powers the Downloads panel restoration after a full page refresh.
     """
-    content_type: str = q["content_type"]
-    if content_type == "all":
-        movies: list = movie_service.get_active_downloads()
-        tvshows: list = tvshow_service.get_active_downloads()
-        videos: list[dict] = [v.to_dict() for v in (movies + tvshows)]
-        return {"videos": videos, "total": len(videos)}
-    service: Union[MovieService, TVShowService] = _get_service(content_type)
-    videos: list[dict] = [v.to_dict() for v in service.get_active_downloads()]
-    return {"videos": videos, "total": len(videos), "content_type": content_type}
+    content_type: str = q.get("content_type") if isinstance(q, dict) else None
+    movies: list = movie_service.get_active_downloads()
+    tvshows: list = tvshow_service.get_active_downloads()
+    videos: list[dict] = [v.to_dict() for v in (movies + tvshows)]
+    return {"videos": videos, "total": len(videos)}
 
 
 @video_bp.route("/download", methods=["POST"])

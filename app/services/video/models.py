@@ -93,6 +93,7 @@ class Video(db.Model):
             "external_id": self.external_id,
             "tmdb_id": self.tmdb_id,
             "torrents": self.torrents,
+            "selected_torrent_hash": self.selected_torrent_hash,
             "download_status": self.download_status.value
                 if self.download_status
                 else "not_downloaded",

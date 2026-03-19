@@ -11,7 +11,7 @@ class Movie(Video):
     __tablename__ = "movie"
 
     __mapper_args__ = {
-        "polymorphic_identity": ContentType.MOVIE,
+        "polymorphic_identity": ContentType.MOVIE.value,
     }
     
     def __repr__(self) -> None:
