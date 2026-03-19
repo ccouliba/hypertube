@@ -70,7 +70,7 @@ const Overlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1100;
+  z-index: 2000;
   padding: 24px;
   animation: ${fadeIn} 0.2s ease;
 `

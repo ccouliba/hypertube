@@ -1,5 +1,5 @@
 // HomePage — container: wires useSearch + useAuth and delegates rendering to HomePageView.
-import React, { useEffect } from "react"
+import React, { useEffect, useLayoutEffect } from "react"
 import useSearch from "@/hooks/useSearch"
 import { useAppDispatch } from "@/hooks/useAppStore"
 import videoService from "@/services/video.service"
@@ -13,11 +13,7 @@ const HomePage: React.FC = () => {
   const { query, activeTab, results, totalResults, totalPages, page, localMovies, localTvShows, loading, error, search, changeTab, changePage, loadLocalVideos } =
     useSearch()
 
-  useEffect(() => {
-    loadLocalVideos()
-    search("")
-    // Restore active downloads from backend so the Downloads panel is populated
-    // immediately after a full page refresh.
+  useLayoutEffect(() => {
     videoService.getActiveDownloads()
       .then(({ videos }) => {
         videos.forEach((v) => {
@@ -27,6 +23,12 @@ const HomePage: React.FC = () => {
         })
       })
       .catch(() => {/* best-effort restore, ignore errors */})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    loadLocalVideos()
+    search("")
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

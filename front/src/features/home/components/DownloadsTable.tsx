@@ -8,7 +8,6 @@ import {
 } from "@/store/slices/downloadSlice"
 import type { DownloadEntry } from "@/store/slices/downloadSlice"
 
-
 const DownloadsTable: React.FC = () => {
   const dispatch = useAppDispatch()
   const entries = useAppSelector((state) =>

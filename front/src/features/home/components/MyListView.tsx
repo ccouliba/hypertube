@@ -21,7 +21,6 @@ export const MyListViewLayout: React.FC<MyListViewProps> = ({ movies, tvShows })
     <LeftPanel>
       <DownloadsTable />
     </LeftPanel>
-
     <RightPanel>
       <ContentSection>
         <SectionHeader>
@@ -34,9 +33,7 @@ export const MyListViewLayout: React.FC<MyListViewProps> = ({ movies, tvShows })
           <VideoCarousel videos={movies} />
         )}
       </ContentSection>
-
       <Divider />
-
       <ContentSection>
         <SectionHeader>
           <SectionTitle>TV Shows</SectionTitle>

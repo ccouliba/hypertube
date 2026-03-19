@@ -77,7 +77,6 @@ export const useDownload = (video: VideoResult) => {
     dispatch(resumeDownloadThunk({ contentType: entry.contentType, videoId: entry.videoId, hash: entry.hash }))
   }, [dispatch, entry])
 
-
   const videoId = entry?.videoId ?? (video.downloaded ? video.id : undefined)
   const contentTypeForDelete = entry?.contentType ?? video.content_type
 

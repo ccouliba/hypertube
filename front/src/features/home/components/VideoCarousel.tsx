@@ -12,10 +12,8 @@ interface VideoCarouselProps {
 
 const VideoCarousel: React.FC<VideoCarouselProps> = ({ videos }) => {
   const [offset, setOffset] = useState(0)
-
   const maxOffset = Math.max(0, videos.length - PAGE_SIZE)
 
-  // Recale l'offset si des vidéos sont supprimées et qu'il dépasse le max
   useEffect(() => {
     setOffset((o) => Math.min(o, maxOffset))
   }, [maxOffset])
