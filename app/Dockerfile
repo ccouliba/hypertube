@@ -7,7 +7,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libboost-all-dev \
     libssl-dev \
-    postgresql-client
+    postgresql-client \
+    ffmpeg
 
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
