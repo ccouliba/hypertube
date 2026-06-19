@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     libpq-dev \
     libssl-dev \
-    libboost-all-dev \
     ffmpeg
     
 COPY celery/requirements.txt /tmp/celery_requirements.txt

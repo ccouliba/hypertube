@@ -1,6 +1,5 @@
 FROM redis:7-alpine
 
-ENV PYTHONPATH=/app
 WORKDIR /app
 
 EXPOSE 6379
