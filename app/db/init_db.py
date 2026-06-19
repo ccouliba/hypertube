@@ -19,9 +19,9 @@ def init_db() -> None:
         db.create_all()
         print("Tables created successfully!")
         print(f"  - user")
-        print(f"  - refresh_token")
         print(f"  - movie")
         print(f"  - tv_show")
+        print(f"  - ...")
 
 
 if __name__ == "__main__":

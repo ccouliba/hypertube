@@ -89,15 +89,6 @@ def logout() -> Response:
     return _clear_refresh_cookie(response)
 
 
-@auth_bp.route("/users", methods=["GET"])
-@auth_bp.response(200, UsersListResponseSchema)
-@auth_bp.doc(security=[{"BearerAuth": []}])
-@require_auth
-def get_users() -> dict:
-    """Get the list of all users"""
-    return {"users": auth_service.get_all_users()}
-
-
 @auth_bp.route("/users/<int:user_id>", methods=["GET"])
 @auth_bp.response(200, UserPublicSchema)
 @auth_bp.doc(security=[{"BearerAuth": []}])
