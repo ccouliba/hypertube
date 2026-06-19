@@ -29,8 +29,17 @@ class ProductionConfig(Config):
     DEBUG: bool = False
 
 
+class TestingConfig(Config):
+    """Testing configuration"""
+    DEBUG: bool = True
+    TESTING: bool = True
+    SQLALCHEMY_DATABASE_URI: str = "sqlite:///:memory:"
+    SQLALCHEMY_ECHO: bool = False
+
+
 flask_env: dict[str, type[Config]] = {
     "dev": DevelopmentConfig,
     "prod": ProductionConfig,
+    "testing": TestingConfig,
     "default": DevelopmentConfig
 }
