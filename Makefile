@@ -41,7 +41,7 @@ build:
 	@echo "✓ Images rebuilt"
 
 clean:
-	if docker container ls -q | grep -q .; then \
+	if podman container ls -q | grep -q .; then \
 		$(COMPOSE_CMD) down -v --remove-orphans; \
 		echo "✓ Containers and volumes removed"; \
 	else \
@@ -51,16 +51,16 @@ clean:
 	@echo "✓ All containers and volumes removed"
 
 fclean: clean
-	if docker images -q | grep -q .; then \
-		docker rmi -f $$(docker images -q); \
-		docker system prune -af --volumes && docker network prune -f; \
+	if podman images -q | grep -q .; then \
+		podman rmi -f $$(podman images -q); \
+		podman system prune -af && podman volume prune -f && podman network prune -f; \
 		echo "✓ Full cleanup completed"; \
 	else \
 		echo "No Docker images to remove. Full cleanup completed."; \
 	fi
 
 shell:
-	docker exec -it $(APP_CONTAINER) /bin/sh
+	podman exec -it $(APP_CONTAINER) /bin/sh
 
 test:
 	@if command -v pytest &> /dev/null; then \
@@ -84,12 +84,12 @@ test-coverage:
 		exit 1; \
 	fi
 
-test-coverage-docker:
-	docker exec $(APP_CONTAINER) pytest tests/ --cov=app --cov-report=html --cov-report=term-missing
-	@echo "✓ Coverage report generated in htmlcov/"
+# test-coverage-docker:
+# 	docker exec $(APP_CONTAINER) pytest tests/ --cov=app --cov-report=html --cov-report=term-missing
+# 	@echo "✓ Coverage report generated in htmlcov/"
 
 migrate:
-	docker exec $(APP_CONTAINER) flask db upgrade
+	podman exec $(APP_CONTAINER) flask db upgrade
 
 .PHONY: help run stop logs logs-app logs-db build clean shell test test-coverage migrate
 .DEFAULT_GOAL := help

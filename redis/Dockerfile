@@ -1,4 +1,5 @@
-FROM redis:7-alpine
+# FROM redis:7-alpine
+FROM docker.io/library/redis:7-alpine
 
 WORKDIR /app
 
