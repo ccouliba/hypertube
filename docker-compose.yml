@@ -15,6 +15,7 @@ services:
       app:
         condition: service_started
     restart: unless-stopped
+    tty: true
     
   qbittorrent:
     image: linuxserver/qbittorrent:latest
@@ -69,7 +70,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-   
     restart: unless-stopped
     tty: true
 
