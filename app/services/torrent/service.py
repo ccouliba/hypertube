@@ -44,11 +44,12 @@ class TorrentService:
             LOGGER.info("TorrentService: initialized and connected to qBittorrent")
         except Exception as e:
             LOGGER.warning(f"TorrentService: initial connection failed: {e}")
-    
+
+
     def start_download(
-        self,
-        torrent_url: str,
-        torrent_hash: str = None
+    self,
+    torrent_url: str,
+    torrent_hash: str = None
     ) -> Dict:
         """
         Start downloading a torrent via qBittorrent API
@@ -61,6 +62,15 @@ class TorrentService:
             Exception: If download fails to start
         """
         try:
+            if torrent_hash:
+                existing = self.qb.torrents_info(torrent_hashes=torrent_hash)
+                if existing:
+                    LOGGER.info(f"TorrentService: Torrent already exists — hash: {torrent_hash}, skipping adding")
+                    return {
+                        "status": "started",
+                        "torrent_hash": torrent_hash,
+                        "save_path": DOWNLOAD_DIR
+                    }
             self.qb.torrents_add(
                 urls=torrent_url,
                 save_path=DOWNLOAD_DIR,
@@ -76,6 +86,38 @@ class TorrentService:
         except Exception as e:
             LOGGER.exception("TorrentService: Error starting download")
             raise
+
+    # def start_download(
+    #     self,
+    #     torrent_url: str,
+    #     torrent_hash: str = None
+    # ) -> Dict:
+    #     """
+    #     Start downloading a torrent via qBittorrent API
+    #     Args:
+    #         torrent_url: Magnet link or torrent URL
+    #         torrent_hash: Optional torrent hash (for tracking)
+    #     Returns:
+    #         Dict with status and download info
+    #     Raises:
+    #         Exception: If download fails to start
+    #     """
+    #     try:
+    #         self.qb.torrents_add(
+    #             urls=torrent_url,
+    #             save_path=DOWNLOAD_DIR,
+    #             is_sequential_download=True,
+    #             is_first_last_piece_priority=True
+    #         )
+    #         LOGGER.info(f"TorrentService: Started download — hash: {torrent_hash}")
+    #         return {
+    #             "status": "started",
+    #             "torrent_hash": torrent_hash,
+    #             "save_path": DOWNLOAD_DIR
+    #         }
+    #     except Exception as e:
+    #         LOGGER.exception("TorrentService: Error starting download")
+    #         raise
     
     def get_download_status(
         self,
