@@ -13,7 +13,7 @@ services:
       - app-network
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     tty: true
     
@@ -23,10 +23,11 @@ services:
     env_file:
       - .env
     ports:
-      - "8080:8080"
-      - "6881:6881"
+      - "127.0.0.1:8080:8080"
+      - "6881:6881/tcp"
+      - "6881:6881/udp"
     volumes:
-      - ./qbittorrent/config/qBittorrent/qBittorrent.conf:/config/qBittorrent/qBittorrent.conf:ro
+      - ./qbittorrent/config/qBittorrent/qBittorrent.conf:/config/qBittorrent/qBittorrent.conf
       - qbittorrent_cache:/config
       - downloads_data:/downloads
     networks:
@@ -47,8 +48,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
-    ports:
-      - "5000:5000"
+    expose:
+      - "5000"
     dns:
       - ${DNS_PRIMARY}
       - ${DNS_SECONDARY}
@@ -122,7 +123,7 @@ services:
     build:
       context: .
       dockerfile: celery/Dockerfile
-    command: celery -A app.tasks.celery_app:celery_app worker --beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info
     env_file:
       - .env
     dns:
@@ -137,6 +138,26 @@ services:
       redis:
         condition: service_healthy
       qbittorrent:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    restart: always
+    tty: true
+
+  celery-beat:
+    container_name: celery-beat
+    build:
+      context: .
+      dockerfile: celery/Dockerfile
+    command: celery -A app.tasks.celery_app:celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app
+    networks:
+      - app-network
+    depends_on:
+      redis:
         condition: service_healthy
       database:
         condition: service_healthy

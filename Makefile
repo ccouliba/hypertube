@@ -1,6 +1,33 @@
 COMPOSE_FILE := docker-compose.yml
+
+ifndef COMPOSE_CMD
+ifneq ($(shell if command -v podman-compose >/dev/null 2>&1 && command -v podman >/dev/null 2>&1; then echo yes; fi),)
 COMPOSE_CMD := podman-compose -f $(COMPOSE_FILE)
-APP_CONTAINER := backend
+else
+COMPOSE_CMD := docker compose -f $(COMPOSE_FILE)
+endif
+endif
+APP_SERVICE := app
+
+ifeq ($(NO_COLOR),1)
+GREEN :=
+RED :=
+RESET :=
+else
+GREEN := \033[0;32m
+RED := \033[0;31m
+RESET := \033[0m
+endif
+
+define RUN
+	@printf "[RUN] %s...\n" "$(1)"
+	@if $(2); then \
+		printf "$(GREEN)[OK]$(RESET) %s\n" "$(1)"; \
+	else \
+		printf "$(RED)[NO]$(RESET) %s\n" "$(1)"; \
+		exit 1; \
+	fi
+endef
 
 help:
 	@echo "Hypertube - Available commands:"
@@ -11,86 +38,49 @@ help:
 	@echo "  make logs-app        - Show app logs only"
 	@echo "  make logs-db         - Show database logs only"
 	@echo "  make build           - Rebuild all images"
-	@echo "  make clean           - Stop and remove containers, volumes, images"
+	@echo "  make clean           - Stop and remove containers and volumes"
+	@echo "  make fclean          - Stop services, remove volumes and local images"
 	@echo "  make shell           - Access app container shell"
 	@echo "  make test            - Run unit tests (95%+ coverage)"
-	@echo "  make test-docker     - Run tests inside Docker container - (unavailable)"
 	@echo "  make test-coverage   - Run tests with HTML coverage report"
 	@echo "  make migrate         - Run database migrations"
 	@echo ""
 
 run:
-	$(COMPOSE_CMD) up --build
-	@echo "✓ Services started"
+	$(call RUN,Démarrage des services,$(COMPOSE_CMD) up --build)
 
 stop:
-	$(COMPOSE_CMD) down
-	@echo "✓ Services removed"
+	$(call RUN,Arrêt des services,$(COMPOSE_CMD) down)
 
 logs:
-	$(COMPOSE_CMD) logs -f
+	$(call RUN,Affichage des logs,$(COMPOSE_CMD) logs -f)
 
 logs-app:
-	$(COMPOSE_CMD) logs -f app
+	$(call RUN,Affichage des logs du backend,$(COMPOSE_CMD) logs -f app)
 
 logs-db:
-	$(COMPOSE_CMD) logs -f db
+	$(call RUN,Affichage des logs de la base de données,$(COMPOSE_CMD) logs -f database)
 
 build:
-	$(COMPOSE_CMD) build
-	@echo "✓ Images rebuilt"
+	$(call RUN,Reconstruction des images,$(COMPOSE_CMD) build)
 
 clean:
-	if podman container ls -q | grep -q .; then \
-		$(COMPOSE_CMD) down -v --remove-orphans; \
-		echo "✓ Containers and volumes removed"; \
-	else \
-		echo "No running containers to remove. Cleanup completed."; \
-	fi
-	$(COMPOSE_CMD) down -v --remove-orphans
-	@echo "✓ All containers and volumes removed"
+	$(call RUN,Nettoyage des conteneurs et volumes,$(COMPOSE_CMD) down -v --remove-orphans)
 
-fclean: clean
-	if podman images -q | grep -q .; then \
-		podman rmi -f $$(podman images -q); \
-		podman system prune -af && podman volume prune -f && podman network prune -f; \
-		echo "✓ Full cleanup completed"; \
-	else \
-		echo "No Docker images to remove. Full cleanup completed."; \
-	fi
+fclean:
+	$(call RUN,Nettoyage complet du projet,$(COMPOSE_CMD) down -v --remove-orphans --rmi local)
 
 shell:
-	podman exec -it $(APP_CONTAINER) /bin/sh
+	$(call RUN,Ouvrir un shell dans le backend,$(COMPOSE_CMD) exec $(APP_SERVICE) /bin/sh)
 
 test:
-	@if command -v pytest &> /dev/null; then \
-		pytest tests/ -v --tb=short; \
-	else \
-		echo "pytest not found in PATH. Would you like to:"; \
-		echo "  1. Run: pip install -r app/requirements.txt"; \
-# 		echo "  2. Or use Docker: make dockers-test"; \
-		exit 1; \
-	fi
-
-# test-docker:
-# 	docker exec $(APP_CONTAINER) pytest tests/ -v --tb=short
+	$(call RUN,Exécution des tests,pytest tests/ -v --tb=short)
 
 test-coverage:
-	@if command -v pytest &> /dev/null; then \
-		pytest tests/ --cov=app --cov-report=html --cov-report=term-missing; \
-		echo "✓ Coverage report generated in htmlcov/"; \
-	else \
-		echo "pytest not found. Run: pip install -r app/requirements.txt"; \
-		exit 1; \
-	fi
-
-# test-coverage-docker:
-# 	docker exec $(APP_CONTAINER) pytest tests/ --cov=app --cov-report=html --cov-report=term-missing
-# 	@echo "✓ Coverage report generated in htmlcov/"
+	$(call RUN,Exécution des tests avec couverture,pytest tests/ --cov=app --cov-report=html --cov-report=term-missing)
 
 migrate:
-	podman exec $(APP_CONTAINER) flask db upgrade
+	$(call RUN,Application des migrations,$(COMPOSE_CMD) exec $(APP_SERVICE) flask db upgrade)
 
-.PHONY: help run stop logs logs-app logs-db build clean shell test test-coverage migrate
+.PHONY: help run stop logs logs-app logs-db build clean fclean shell test test-coverage migrate
 .DEFAULT_GOAL := help
-.SILENT:

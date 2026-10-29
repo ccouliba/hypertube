@@ -21,7 +21,8 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir celery[redis]
 COPY app /app
 RUN addgroup --system hypertube && adduser --system --ingroup hypertube appuser \
-    && chown -R appuser:hypertube /app
+    && mkdir -p /downloads \
+    && chown -R appuser:hypertube /app /downloads
 USER appuser
 EXPOSE 5555
 

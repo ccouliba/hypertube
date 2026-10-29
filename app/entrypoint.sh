@@ -25,9 +25,8 @@ if [ -d "$VERSIONS_DIR" ] && [ -n "$(ls -A $VERSIONS_DIR 2>/dev/null)" ]; then
   echo "🔧 Applying database migrations..."
   flask db upgrade --directory "$MIGRATION_DIR"
 else
-  echo "🔧 No migration files found — initializing database schema via create_all..."
-  cd /
-  python -m app.db.init_db
+  echo "❌ No database migrations found in $MIGRATION_DIR"
+  exit 1
 fi
 
 echo "🚀 Starting Flask application with Gunicorn (factory create_app)..."
