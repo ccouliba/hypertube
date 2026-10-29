@@ -7,6 +7,7 @@ import { deleteVideo } from "./downloadSlice"
 
 interface FetchSearchArgs {
   query: string
+  page: number
   limit: number
 }
 
@@ -24,9 +25,9 @@ export const fetchLocalVideos = createAsyncThunk(
 
 export const fetchSearch = createAsyncThunk(
   "search/fetch",
-  async ({ query, limit }: FetchSearchArgs, { rejectWithValue }) => {
+  async ({ query, page, limit }: FetchSearchArgs, { rejectWithValue }) => {
     try {
-      return await searchService.search(query, 1, limit)
+      return await searchService.search(query, page, limit)
     } catch (err) {
       return rejectWithValue((err as Error).message)
     }
@@ -47,6 +48,8 @@ const initialState: SearchState = {
   tv_shows: [],
   localVideos: [],
   pages: { movies: 1, tv_shows: 1, my_list: 1 },
+  totalPages: { movies: 1, tv_shows: 1, my_list: 1 },
+  totalResults: { movies: 0, tv_shows: 0, my_list: 0 },
   loading: false,
   error: null,
 }
@@ -84,7 +87,21 @@ const searchSlice = createSlice({
         state.loading = false
         state.movies = action.payload.movies.results
         state.tv_shows = action.payload.tv_shows.results
-        state.pages = { movies: 1, tv_shows: 1, my_list: 1 }
+        state.pages = {
+          ...state.pages,
+          movies: action.payload.page,
+          tv_shows: action.payload.page,
+        }
+        state.totalPages = {
+          ...state.totalPages,
+          movies: action.payload.movies.total_pages,
+          tv_shows: action.payload.tv_shows.total_pages,
+        }
+        state.totalResults = {
+          ...state.totalResults,
+          movies: action.payload.movies.total_results,
+          tv_shows: action.payload.tv_shows.total_results,
+        }
       })
       .addCase(fetchSearch.rejected, (state, action) => {
         state.loading = false

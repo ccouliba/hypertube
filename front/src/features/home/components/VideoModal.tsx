@@ -148,7 +148,7 @@ export const VideoModalView: React.FC<VideoModalViewProps> = ({
           : <NoSynopsis>No synopsis available.</NoSynopsis>
         }
         <ModalActions>
-          {(isDone || isDownloading) && (
+          {isDone && (
             <WatchBtn onClick={onWatch} disabled={playerLoading} aria-label="Watch">
               {playerLoading ? "Loading…" : "▶ Watch"}
             </WatchBtn>

@@ -2,8 +2,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
 import apiClient from "@/api/axios"
 
-const DEFAULT_MAX_RESULTS : number = 84
-const DEFAULT_PAGE_SIZE : number = 20
+const DEFAULT_MAX_RESULTS: number = 50
+const DEFAULT_PAGE_SIZE: number = 17
 
 interface ConfigState {
   maxTotalResults: number

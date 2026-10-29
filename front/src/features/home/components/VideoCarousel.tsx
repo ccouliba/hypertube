@@ -3,7 +3,7 @@ import styled from "styled-components"
 import type { VideoResult } from "@/types/search.types"
 import VideoCard from "./VideoCard"
 
-const PAGE_SIZE = 3
+const PAGE_SIZE = 5
 
 interface VideoCarouselProps {
   videos: VideoResult[]
@@ -85,10 +85,11 @@ const Track = styled.div<{ $count: number; $natural: boolean }>`
   grid-template-columns: ${({ $count, $natural }) =>
     $natural
       ? "repeat(auto-fill, minmax(130px, 1fr))"
-      : `repeat(${$count}, 1fr)`};
+      : `repeat(${$count}, minmax(130px, 1fr))`};
   gap: ${({ theme }) => theme.spacing.md};
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 `
 
 const NavBtn = styled.button`

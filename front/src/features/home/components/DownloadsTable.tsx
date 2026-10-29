@@ -16,7 +16,7 @@ const DownloadsTable: React.FC = () => {
   const dispatch = useAppDispatch()
   const entries = useAppSelector((state) =>
     Object.values(state.downloads.items).filter(
-      (e) => e.status !== "completed" && e.status !== "error"
+      (e) => e.status !== "completed"
     )
   )
   const [modalVideo, setModalVideo] = useState<DownloadEntry["video"] | null>(null)
@@ -28,9 +28,15 @@ const DownloadsTable: React.FC = () => {
       .then(({ videos }) => {
         if (!mounted) return
         videos.forEach((v) => {
-          const hash = v.selected_torrent_hash ?? v.torrents?.[0]?.hash
+          const hash = v.selected_torrent_hash
+            ?? v.torrents?.[0]?.hash
+            ?? (v.id != null ? `video:${v.id}` : null)
           if (!hash) return
-          dispatch(restoreDownload({ hash, contentType: v.content_type, video: v }))
+          dispatch(restoreDownload({
+            hash,
+            contentType: v.content_type.toLowerCase(),
+            video: v,
+          }))
         })
       })
       .catch(() => {
@@ -85,6 +91,7 @@ const STATUS_LABELS: Record<string, string> = {
   queued: "Queued",
   downloading: "Downloading",
   paused: "Paused",
+  error: "Error",
 }
 
 export const DownloadsTableView: React.FC<DownloadsTableViewProps> = ({
@@ -140,13 +147,13 @@ export const DownloadsTableView: React.FC<DownloadsTableViewProps> = ({
                         <rect x="15" y="4" width="4" height="16" rx="1" />
                       </svg>
                     </ActionBtn>
-                  ) : (
+                  ) : entry.status === "paused" || entry.status === "queued" ? (
                     <ActionBtn onClick={() => onResume(entry)} title="Resume" aria-label="Resume">
                       <svg viewBox="0 0 24 24" fill="currentColor">
                         <polygon points="6,4 20,12 6,20" />
                       </svg>
                     </ActionBtn>
-                  )}
+                  ) : null}
                   <ActionBtn
                     $danger
                     onClick={() => onStop(entry)}

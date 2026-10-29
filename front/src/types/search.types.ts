@@ -62,6 +62,8 @@ export interface SearchState {
   tv_shows: VideoResult[]
   localVideos: VideoResult[]
   pages: { movies: number; tv_shows: number; my_list: number }
+  totalPages: { movies: number; tv_shows: number; my_list: number }
+  totalResults: { movies: number; tv_shows: number; my_list: number }
   loading: boolean
   error: string | null
 }

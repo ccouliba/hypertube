@@ -8,6 +8,7 @@ import {
   setPage,
   clearResults,
 } from "@/store/slices/searchSlice"
+import { fetchActiveDownloads } from "@/store/slices/downloadSlice"
 import type { ActiveTab } from "@/types/search.types"
 
 /**
@@ -16,9 +17,9 @@ import type { ActiveTab } from "@/types/search.types"
  */
 const useSearch = () => {
   const dispatch = useAppDispatch()
-  const { query, activeTab, movies, tv_shows, localVideos, pages, loading, error } =
+  const { query, activeTab, movies, tv_shows, localVideos, pages, totalPages, totalResults, loading, error } =
     useAppSelector((state) => state.search)
-  const { pageSize, maxTotalResults } = useAppSelector((state) => state.config)
+  const { pageSize } = useAppSelector((state) => state.config)
   const downloadItems = useAppSelector((state) => state.downloads.items)
   const downloadEntries = useMemo(() => Object.values(downloadItems), [downloadItems])
 
@@ -62,24 +63,32 @@ const useSearch = () => {
       : activeTab === "movies"
         ? movies
         : tv_shows
-  const totalResults = allResults.length
-  const totalPages = Math.max(1, Math.ceil(totalResults / pageSize))
+  const resultCount =
+    activeTab === "my_list"
+      ? allResults.length
+      : totalResults[activeTab]
+  const pageCount =
+    activeTab === "my_list"
+      ? Math.max(1, Math.ceil(resultCount / pageSize))
+      : totalPages[activeTab]
 
   // Clamp current page if it exceeds totalPages (e.g. after a deletion)
   useEffect(() => {
-    if (page > totalPages) {
-      dispatch(setPage({ tab: activeTab, page: totalPages }))
+    if (page > pageCount) {
+      dispatch(setPage({ tab: activeTab, page: pageCount }))
     }
-  }, [totalPages, page, activeTab, dispatch])
+  }, [pageCount, page, activeTab, dispatch])
 
-  const results = allResults.slice((page - 1) * pageSize, page * pageSize)
+  const results = activeTab === "my_list"
+    ? allResults.slice((page - 1) * pageSize, page * pageSize)
+    : allResults
 
   const search = useCallback(
     (q: string) => {
       dispatch(setQuery(q))
-      dispatch(fetchSearch({ query: q, limit: maxTotalResults }))
+      dispatch(fetchSearch({ query: q, page: 1, limit: pageSize }))
     },
-    [dispatch, maxTotalResults]
+    [dispatch, pageSize]
   )
 
   const changeTab = useCallback(
@@ -88,12 +97,22 @@ const useSearch = () => {
   )
 
   const changePage = useCallback(
-    (p: number) => dispatch(setPage({ tab: activeTab, page: p })),
-    [dispatch, activeTab]
+    (p: number) => {
+      dispatch(setPage({ tab: activeTab, page: p }))
+      if (activeTab !== "my_list") {
+        dispatch(fetchSearch({ query, page: p, limit: pageSize }))
+      }
+    },
+    [dispatch, activeTab, query, pageSize]
   )
 
   const loadLocalVideos = useCallback(
     () => { dispatch(fetchLocalVideos()) },
+    [dispatch]
+  )
+
+  const loadActiveDownloads = useCallback(
+    () => { dispatch(fetchActiveDownloads()) },
     [dispatch]
   )
 
@@ -104,8 +123,8 @@ const useSearch = () => {
     activeTab,
     page,
     results,
-    totalResults,
-    totalPages,
+    totalResults: resultCount,
+    totalPages: pageCount,
     localMovies,
     localTvShows,
     loading,
@@ -114,6 +133,7 @@ const useSearch = () => {
     changeTab,
     changePage,
     loadLocalVideos,
+    loadActiveDownloads,
     reset,
   }
 }

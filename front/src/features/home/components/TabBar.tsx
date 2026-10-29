@@ -8,9 +8,9 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { key: "my_list", label: "My Board" },
   { key: "movies", label: "Movies" },
   { key: "tv_shows", label: "TV Shows" },
+  { key: "my_list", label: "Downloads" },
 ]
 
 interface TabBarProps {

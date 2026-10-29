@@ -6,11 +6,12 @@ import HomePageView from "./HomePageView"
 
 const HomePage: React.FC = () => {
   const { user, logout } = useAuth()
-  const { query, activeTab, results, totalResults, totalPages, page, localMovies, localTvShows, loading, error, search, changeTab, changePage, loadLocalVideos } =
+  const { query, activeTab, results, totalResults, totalPages, page, localMovies, localTvShows, loading, error, search, changeTab, changePage, loadLocalVideos, loadActiveDownloads } =
     useSearch()
 
   useEffect(() => {
     loadLocalVideos()
+    loadActiveDownloads()
     search("")
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

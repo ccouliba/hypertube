@@ -45,7 +45,6 @@ const UserMenu: React.FC<UserMenuProps> = ({ user, onLogout }) => {
             <DropdownEmail>{user.username}</DropdownEmail>
           </DropdownHeader>
           <Divider />
-          <MenuItem disabled title="Coming soon">Downloads</MenuItem>
           <MenuItem disabled title="Coming soon">Account</MenuItem>
           <MenuItem disabled title="Coming soon">Settings</MenuItem>
           <Divider />

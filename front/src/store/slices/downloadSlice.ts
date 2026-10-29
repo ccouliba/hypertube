@@ -53,6 +53,18 @@ export const pollStatus = createAsyncThunk(
   }
 )
 
+export const fetchActiveDownloads = createAsyncThunk(
+  "downloads/fetchActive",
+  async (_, { rejectWithValue }) => {
+    try {
+      const { videos } = await videoService.getActiveDownloads()
+      return videos
+    } catch (err) {
+      return rejectWithValue((err as Error).message)
+    }
+  }
+)
+
 export const pauseDownload = createAsyncThunk(
   "downloads/pause",
   async ({ contentType, videoId, hash }: { contentType: string; videoId: number; hash: string }) => {
@@ -107,6 +119,22 @@ const downloadSlice = createSlice({
         const { contentType, payload, video } = action.meta.arg
         const hash = payload.torrent_hash
         state.items[hash] = { hash, contentType, status: "queued", progress: 0, video }
+      })
+      .addCase(fetchActiveDownloads.fulfilled, (state, action) => {
+        for (const video of action.payload) {
+          const hash = video.selected_torrent_hash
+            ?? video.torrents?.[0]?.hash
+            ?? (video.id != null ? `video:${video.id}` : null)
+          if (!hash || state.items[hash]) continue
+          state.items[hash] = {
+            hash,
+            contentType: video.content_type.toLowerCase(),
+            status: normalize(video.download_status),
+            progress: video.download_progress ?? 0,
+            videoId: video.id,
+            video,
+          }
+        }
       })
       .addCase(startDownload.fulfilled, (state, action) => {
         const { hash, contentType, video, result } = action.payload
