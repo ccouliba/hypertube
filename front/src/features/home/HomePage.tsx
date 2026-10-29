@@ -1,28 +1,26 @@
 // HomePage — container: wires useSearch + useAuth and delegates rendering to HomePageView.
-import React, { useEffect } from "react"
-import useSearch from "@/hooks/useSearch"
-import useAuth from "@/hooks/useAuth"
+import React from "react"
 import HomePageView from "./HomePageView"
+import { useHomeController } from "./hooks/useHomeController"
 
 const HomePage: React.FC = () => {
-  const { user, logout } = useAuth()
-  const { query, activeTab, results, totalResults, totalPages, page, localMovies, localTvShows, loading, error, search, changeTab, changePage, loadLocalVideos, loadActiveDownloads } =
-    useSearch()
-
-  useEffect(() => {
-    loadLocalVideos()
-    loadActiveDownloads()
-    search("")
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const heading = query.trim()
-    ? `Results for "${query}"`
-    : activeTab === "my_list"
-      ? ""
-      : activeTab === "movies"
-        ? `Top${totalResults !== null ? ` ${totalResults.toLocaleString()}` : ""} Movies`
-        : `Top${totalResults !== null ? ` ${totalResults.toLocaleString()}` : ""} TV Shows`
+  const {
+    user,
+    logout,
+    query,
+    activeTab,
+    heading,
+    results,
+    totalPages,
+    page,
+    localMovies,
+    localTvShows,
+    loading,
+    error,
+    search,
+    changeTab,
+    changePage,
+  } = useHomeController()
 
   return (
     <HomePageView

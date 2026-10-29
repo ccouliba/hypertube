@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from "react"
+import React from "react"
 import styled from "styled-components"
-
-const DEBOUNCE_MS = 700
+import { useSearchInput } from "../hooks/useSearchInput"
 
 interface SearchBarProps {
   value: string
@@ -15,33 +14,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   onSearch,
   placeholder = "Search movies, TV shows…",
 }) => {
-  const [draft, setDraft] = useState(value)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    setDraft(value)
-  }, [value])
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const q = e.target.value
-    setDraft(q)
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => onSearch(q), DEBOUNCE_MS)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      onSearch(draft)
-    }
-    if (e.key === "Escape") {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      setDraft("")
-      onSearch("")
-    }
-  }
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+  const { draft, handleChange, handleKeyDown, clear } = useSearchInput(value, onSearch)
 
   return (
     <Wrapper>
@@ -63,7 +36,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       />
       {draft && (
         <ClearBtn
-          onClick={() => { setDraft(""); onSearch("") }}
+          onClick={clear}
           aria-label="Clear search"
           type="button"
         >

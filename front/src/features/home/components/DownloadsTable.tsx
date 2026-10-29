@@ -1,75 +1,21 @@
-import React, { useEffect, useState } from "react"
+import React from "react"
 import styled from "styled-components"
-import { useAppDispatch, useAppSelector } from "@/hooks/useAppStore"
-import {
-  pauseDownload,
-  resumeDownload,
-  deleteVideo,
-} from "@/store/slices/downloadSlice"
-import { restoreDownload } from "@/store/slices/downloadSlice"
-import videoService from "@/services/video.service"
 import VideoModal from "./VideoModal"
 import type { DownloadEntry } from "@/store/slices/downloadSlice"
+import { useDownloadsController } from "../hooks/useDownloadsController"
 
 
 const DownloadsTable: React.FC = () => {
-  const dispatch = useAppDispatch()
-  const entries = useAppSelector((state) =>
-    Object.values(state.downloads.items).filter(
-      (e) => e.status !== "completed"
-    )
-  )
-  const [modalVideo, setModalVideo] = useState<DownloadEntry["video"] | null>(null)
-
-  useEffect(() => {
-    let mounted = true
-    videoService
-      .getActiveDownloads()
-      .then(({ videos }) => {
-        if (!mounted) return
-        videos.forEach((v) => {
-          const hash = v.selected_torrent_hash
-            ?? v.torrents?.[0]?.hash
-            ?? (v.id != null ? `video:${v.id}` : null)
-          if (!hash) return
-          dispatch(restoreDownload({
-            hash,
-            contentType: v.content_type.toLowerCase(),
-            video: v,
-          }))
-        })
-      })
-      .catch(() => {
-        /* best-effort restore, ignore errors */
-      })
-    return () => { mounted = false }
-  }, [dispatch])
-
-  const handlePause = (e: DownloadEntry) => {
-    if (!e.videoId) return
-    dispatch(pauseDownload({ contentType: e.contentType, videoId: e.videoId, hash: e.hash }))
-  }
-
-  const handleResume = (e: DownloadEntry) => {
-    if (!e.videoId) return
-    dispatch(resumeDownload({ contentType: e.contentType, videoId: e.videoId, hash: e.hash }))
-  }
-
-  const handleStop = (e: DownloadEntry) => {
-    if (!e.videoId) return
-    dispatch(deleteVideo({ contentType: e.contentType, videoId: e.videoId, hash: e.hash }))
-  }
-
-  const handleTitleClick = (video: DownloadEntry["video"]) => setModalVideo(video)
+  const { entries, modalVideo, setModalVideo, pause, resume, stop } = useDownloadsController()
 
   return (
     <>
       <DownloadsTableView
         entries={entries}
-        onPause={handlePause}
-        onResume={handleResume}
-        onStop={handleStop}
-        onTitleClick={handleTitleClick}
+        onPause={pause}
+        onResume={resume}
+        onStop={stop}
+        onTitleClick={setModalVideo}
       />
       {modalVideo && <VideoModal video={modalVideo} onClose={() => setModalVideo(null)} />}
     </>

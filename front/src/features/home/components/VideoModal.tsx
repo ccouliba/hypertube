@@ -1,12 +1,10 @@
 // VideoModal — full detail modal for a video: poster, metadata, download controls, and Watch button.
-import React, { useEffect } from "react"
+import React from "react"
 import styled, { keyframes } from "styled-components"
 import type { VideoResult } from "@/types/search.types"
-import { useDownload } from "@/hooks/useDownload"
-import { useVideoPlayer } from "@/hooks/useVideoPlayer"
+import { useVideoModal } from "../hooks/useVideoModal"
 import VideoPlayer from "./VideoPlayer"
 
-const PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='600'%3E%3Crect width='400' height='600' fill='%231f1f1f'/%3E%3Ctext x='200' y='300' font-family='sans-serif' font-size='16' fill='%23666' text-anchor='middle' dominant-baseline='middle'%3ENo Poster%3C/text%3E%3C/svg%3E"
 const LARGE_RADIUS = 27
 const LARGE_CIRC = +(2 * Math.PI * LARGE_RADIUS).toFixed(2)
 
@@ -17,37 +15,23 @@ interface VideoModalProps {
 }
 
 const VideoModal: React.FC<VideoModalProps> = ({ video, onClose }) => {
-  const { entry, hasTorrent, startDownload, pauseDownload, resumeDownload, deleteVideo, stopDownload, canDelete } = useDownload(video)
-  const player = useVideoPlayer()
-
-  const poster = video.large_cover ?? video.thumbnail ?? PLACEHOLDER
-  const rating = video.rating != null ? video.rating.toFixed(1) : null
-  const isDone = video.downloaded || entry?.status === "completed"
-  const isDownloading = entry?.status === "downloading" || entry?.status === "queued"
-  const isPaused = entry?.status === "paused"
-  const isActive = isDownloading || isPaused
-  const progress = entry?.progress ?? 0
-
-  const handleDownloadClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!entry && !video.downloaded) startDownload()
-  }
-
-  const handleWatchClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    player.open(video)
-  }
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [onClose])
-
-  useEffect(() => {
-    document.body.style.overflow = "hidden"
-    return () => { document.body.style.overflow = "" }
-  }, [])
+  const {
+    player,
+    poster,
+    rating,
+    isDone,
+    isDownloading,
+    isPaused,
+    isActive,
+    progress,
+    hasTorrent,
+    canDelete,
+    onDownload,
+    onWatch,
+    onPause,
+    onResume,
+    onStopOrDelete,
+  } = useVideoModal(video, onClose)
 
   return (
     <>
@@ -65,11 +49,11 @@ const VideoModal: React.FC<VideoModalProps> = ({ video, onClose }) => {
         playerLoading={player.loading}
         playerError={player.error}
         onClose={onClose}
-        onDownload={handleDownloadClick}
-        onWatch={handleWatchClick}
-        onPause={(e) => { e.stopPropagation(); pauseDownload() }}
-        onResume={(e) => { e.stopPropagation(); resumeDownload() }}
-        onStopOrDelete={(e) => { e.stopPropagation(); isActive ? stopDownload() : deleteVideo() }}
+        onDownload={onDownload}
+        onWatch={onWatch}
+        onPause={onPause}
+        onResume={onResume}
+        onStopOrDelete={onStopOrDelete}
       />
       {player.isOpen && player.streamUrl && (
         <VideoPlayer
