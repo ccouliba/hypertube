@@ -27,7 +27,7 @@ APP_CONFIG: dict = {
     "allowed_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     "allowed_headers": ["Content-Type", "Authorization"],
     "supports_credentials": True,
-    "debug": os.getenv("DEBUG", "True").lower() == "true",
+    "debug": os.getenv("DEBUG", "False").lower() == "true",
     "version": "1.0.0",
     # OpenAPI / Swagger
     "openapi": {
@@ -216,9 +216,9 @@ PROVIDERS_CONFIG: dict = {
         "search": int(os.getenv("SEARCH_TIMEOUT", "15")),
     },
     "pagination": {
-        "max_per_page": int(os.getenv("PER_PAGE", "50")),
-        "max_results_per_provider": int(os.getenv("MAX_RESULTS_PER_PROVIDER", "30")),
-        "max_total_results": int(os.getenv("MAX_TOTAL_RESULTS", "100")),
+        "max_per_page": int(os.getenv("PER_PAGE", "17")),
+        "max_results_per_provider": int(os.getenv("MAX_RESULTS_PER_PROVIDER", "50")),
+        "max_total_results": int(os.getenv("MAX_TOTAL_RESULTS", "50")),
     },
     "cache": {
         "ttl": int(os.getenv("CACHE_TTL_SECONDS", "86400")),

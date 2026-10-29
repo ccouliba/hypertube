@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 from app.services.torrent import torrent_service
 from app.services import MovieService, TVShowService
+from app.services.video.models import DownloadStatus
 from app.tasks.celery_app import celery_app
 from app.core.configs import CELERY_CONFIG
 from app.core.errors.handlers import APIError
@@ -14,9 +15,32 @@ LOGGER: logging.Logger = logging.getLogger(__name__)
 
 _retry = CELERY_CONFIG["retry"]
 MONITOR_INTERVAL: int = int(os.getenv("TORRENT_MONITOR_INTERVAL", "5"))
+MONITOR_MAX_ATTEMPTS: int = int(os.getenv("TORRENT_MONITOR_MAX_ATTEMPTS", "360"))
+_ERROR_STATES: frozenset[str] = frozenset({"error", "missingfiles"})
+_PAUSED_STATES: frozenset[str] = frozenset({"pausedl", "stoppeddl"})
 
 # Extensions the browser plays natively
 _BROWSER_NATIVE: frozenset = frozenset({".mp4", ".webm", ".ogg"})
+
+
+def _update_progress(
+    video_service: MovieService | TVShowService,
+    video_id: int,
+    progress: float,
+    status: DownloadStatus | None = None,
+) -> bool:
+    """Update a task's video, returning False when the task is stale."""
+    try:
+        video_service.update_download_progress(video_id, progress, status)
+        return True
+    except APIError as exc:
+        if exc.code == 404:
+            LOGGER.warning(
+                "Downloads: Ignoring stale task for missing video_id=%s",
+                video_id,
+            )
+            return False
+        raise
 
 
 @celery_app.task(name="tasks.start_torrent_download", bind=True)
@@ -67,7 +91,8 @@ def start_torrent_download(
 def monitor_torrent_status(
     torrent_hash: str,
     video_id: int,
-    content_type: str
+    content_type: str,
+    attempt: int = 0,
 ) -> Optional[dict]:
     """
     Poll qBittorrent until the download finishes, then trigger post-processing.
@@ -77,15 +102,58 @@ def monitor_torrent_status(
         if status:
             LOGGER.info(f"Downloads: Torrent {torrent_hash}: {status['progress']:.1f}% — video_id={video_id}")
             video_service = MovieService() if content_type == "movie" else TVShowService()
-            video_service.update_download_progress(video_id, status["progress"])
+            torrent_state = str(status.get("state", "")).lower()
+            if torrent_state in _ERROR_STATES:
+                _update_progress(
+                    video_service,
+                    video_id,
+                    status["progress"],
+                    DownloadStatus.ERROR,
+                )
+                LOGGER.error(
+                    "Downloads: Torrent %s entered terminal error state: %s",
+                    torrent_hash,
+                    status["state"],
+                )
+                return status
+            if torrent_state in _PAUSED_STATES:
+                _update_progress(
+                    video_service,
+                    video_id,
+                    status["progress"],
+                    DownloadStatus.PAUSED,
+                )
+                LOGGER.info(
+                    "Downloads: Torrent %s is paused/stopped: %s",
+                    torrent_hash,
+                    status["state"],
+                )
+                return status
+            if not _update_progress(video_service, video_id, status["progress"]):
+                return status
             if status["is_finished"]:
                 LOGGER.info(f"Downloads: Torrent {torrent_hash} complete — triggering post-processing")
                 process_completed_download.delay(torrent_hash, video_id, content_type)
                 return status
         else:
             LOGGER.info(f"Downloads: Torrent {torrent_hash} not yet in qBittorrent, retrying in {MONITOR_INTERVAL}s")
+        next_attempt = attempt + 1
+        if next_attempt >= MONITOR_MAX_ATTEMPTS:
+            video_service = MovieService() if content_type == "movie" else TVShowService()
+            _update_progress(
+                video_service,
+                video_id,
+                0.0,
+                DownloadStatus.ERROR,
+            )
+            LOGGER.error(
+                "Downloads: Monitoring timed out for torrent %s after %d attempts",
+                torrent_hash,
+                next_attempt,
+            )
+            return status
         monitor_torrent_status.apply_async(
-            args=[torrent_hash, video_id, content_type],
+            args=[torrent_hash, video_id, content_type, next_attempt],
             countdown=MONITOR_INTERVAL
         )
         return status

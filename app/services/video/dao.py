@@ -52,11 +52,28 @@ class VideoDAO(ABC):
         return self.model_class.query.filter_by(
             selected_torrent_hash=torrent_hash
         ).first()
+
+    def get_by_torrent_hashes(self, torrent_hashes: list[str]) -> list[Video]:
+        """Get videos matching any of the provided torrent hashes."""
+        if not torrent_hashes:
+            return []
+        return self.model_class.query.filter(
+            self.model_class.selected_torrent_hash.in_(torrent_hashes)
+        ).all()
     
     def get_by_title(self, title: str) -> list[Video]:
         """Get videos by title (case-insensitive partial match)"""
         return self.model_class.query.filter(
             self.model_class.title.ilike(f"%{title}%")
+        ).all()
+
+    def get_by_titles(self, titles: list[str]) -> list[Video]:
+        """Get videos matching any of the provided titles in one query."""
+        titles = [title for title in titles if title]
+        if not titles:
+            return []
+        return self.model_class.query.filter(
+            db.or_(*(self.model_class.title.ilike(f"%{title}%") for title in titles))
         ).all()
     
     def get_all(self) -> list[Video]:
@@ -107,6 +124,18 @@ class VideoDAO(ABC):
         """Get all currently downloading videos"""
         return self.model_class.query.filter(
             self.model_class.download_status == DownloadStatus.DOWNLOADING
+        ).all()
+
+    def get_active_downloads(self) -> list[Video]:
+        """Get all downloads that have not completed yet."""
+        return self.model_class.query.filter(
+            self.model_class.download_status.in_(
+                (
+                    DownloadStatus.DOWNLOADING,
+                    DownloadStatus.PAUSED,
+                    DownloadStatus.ERROR,
+                )
+            )
         ).all()
     
     def cleanup_old_videos(self, days: int = 30) -> int:

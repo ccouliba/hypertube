@@ -28,6 +28,6 @@ def get_public_config() -> tuple[Response, int]:
         "openapi_spec": f"{base_api}/openapi.json",
         "pagination": {
             "max_total_results": pagination["max_total_results"],
-            "page_size": 20,
+            "page_size": pagination["max_per_page"],
         },
     }), 200

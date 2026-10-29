@@ -147,26 +147,25 @@ class VideoService(ABC):
     
     def get_statistics(self) -> dict:
         """Get statistics"""
-        all_videos: list[Video] = self.dao.get_all()
-        downloaded: list[Video] = self.dao.get_downloaded()
-        downloading: list[Video] = [
-            v for v in all_videos
-                if v.download_status == DownloadStatus.DOWNLOADING
-        ]
+        total: int = self.dao.model_class.query.count()
+        downloaded: int = self.dao.model_class.query.filter(
+            self.dao.model_class.download_status == DownloadStatus.COMPLETED
+        ).count()
+        downloading: int = self.dao.model_class.query.filter(
+            self.dao.model_class.download_status == DownloadStatus.DOWNLOADING
+        ).count()
         return {
-            "total": len(all_videos),
-            "downloaded": len(downloaded),
-            "downloading": len(downloading),
-            "not_downloaded": len(all_videos) - len(downloaded) - len(downloading)
+            "total": total,
+            "downloaded": downloaded,
+            "downloading": downloading,
+            "not_downloaded": total - downloaded - downloading
         }
 
     def get_active_downloads(self) -> list[Video]:
         """Get videos that are currently downloading or paused.
         Used by the front-end to restore the Downloads panel after a full refresh.
         """
-        all_videos: list[Video] = self.dao.get_all()
-        active_statuses: tuple = (DownloadStatus.DOWNLOADING, DownloadStatus.PAUSED)
-        return [v for v in all_videos if v.download_status in active_statuses]
+        return self.dao.get_active_downloads()
     
     def start_download(self, data: dict) -> dict:
         """Start video download via Celery"""

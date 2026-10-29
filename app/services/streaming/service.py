@@ -27,6 +27,17 @@ BROWSER_NATIVE_EXTENSIONS: dict[str, str] = {
 # Minimum bytes downloaded before we attempt to stream
 MIN_STREAMABLE_BYTES: int = 10 * 1024 * 1024  # 10 MB
 CHUNK_SIZE: int = 65_536  # 64 KB read chunks
+DOWNLOADS_ROOT = Path(os.getenv("DOWNLOAD_DIR", "/downloads")).resolve()
+
+
+def resolve_download_path(file_path: str) -> Path:
+    """Resolve a video path and reject anything outside the downloads volume."""
+    resolved = Path(file_path).resolve()
+    try:
+        resolved.relative_to(DOWNLOADS_ROOT)
+    except ValueError as exc:
+        raise APIError(500, "Unexpected file location") from exc
+    return resolved
 
 
 class StreamingService:
@@ -52,6 +63,7 @@ class StreamingService:
             APIError 404: file does not exist.
             APIError 503: not enough data downloaded yet.
         """
+        file_path = str(resolve_download_path(file_path))
         if not os.path.exists(file_path):
             LOGGER.warning(f"StreamingService: file not found on disk: {file_path}")
             raise APIError(404, ERROR_MESSAGES["VIDEO_FILE_NOT_ON_DISK"])

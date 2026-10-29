@@ -9,6 +9,7 @@ from app.core.errors import APIError
 from app.core.errors.messages import ERROR_MESSAGES
 from app.services.video.models import ContentType
 from app.services import MovieService, TVShowService
+from app.services.streaming.service import resolve_download_path
 from app.api.decorators.require_auth import require_auth
 from app.api.decorators.require_stream_auth import require_stream_auth
 from app.schemas import (
@@ -227,10 +228,11 @@ def stream_video(q: dict, video_id: int) -> Response:
     ext: str = Path(file_path).suffix.lower()
     if _USE_NGINX and ext in _NGINX_NATIVE_EXTS:
         # Security: reject any path that escaped the downloads directory.
-        if not file_path.startswith(_DOWNLOADS_ROOT + "/"):
+        resolved_path = resolve_download_path(file_path)
+        if not str(resolved_path).startswith(_DOWNLOADS_ROOT + "/"):
             LOGGER.error("stream_video: file path outside downloads root: %s", file_path)
             raise APIError(500, "Unexpected file location")
-        internal_path: str = _NGINX_INTERNAL_PREFIX + file_path[len(_DOWNLOADS_ROOT):]
+        internal_path: str = _NGINX_INTERNAL_PREFIX + str(resolved_path)[len(_DOWNLOADS_ROOT):]
         LOGGER.debug("stream_video: X-Accel-Redirect → %s", internal_path)
         resp: Response = make_response("", 200)
         resp.headers["X-Accel-Redirect"] = internal_path

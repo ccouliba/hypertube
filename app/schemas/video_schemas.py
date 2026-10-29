@@ -76,6 +76,8 @@ class VideoSchema(Schema):
     provider = fields.Str(allow_none=True)
     external_id = fields.Str(allow_none=True)
     tmdb_id = fields.Int(allow_none=True)
+    torrents = fields.List(fields.Dict(), allow_none=True)
+    selected_torrent_hash = fields.Str(allow_none=True)
     content_type = fields.Str()
     downloaded = fields.Bool()
     download_status = fields.Str()

@@ -13,10 +13,11 @@ from app.services.video.movie.service import MovieService
 from app.services.video.tv_show.service import TVShowService
 from app.services.search.registry import provider_registry as Registry
 from app.core.configs import PROVIDERS_CONFIG, REDIS_CONFIG
+from app.core.errors.handlers import APIError
 
 LOGGER = logging.getLogger(__name__)
 MAX_TOTAL: int = int(PROVIDERS_CONFIG["pagination"]["max_total_results"])
-_POPULAR_CACHE_KEY: str = "hypertube:popular"
+_POPULAR_CACHE_KEY: str = "hypertube:popular:v2"
 _POPULAR_CACHE_TTL: int = int(PROVIDERS_CONFIG["cache"]["ttl"])
 _cache = _redis_lib.Redis.from_url(
     REDIS_CONFIG["base_url"] + str(REDIS_CONFIG["db"]["search_cache"]),  # DB 4: search popular cache
@@ -80,12 +81,12 @@ class SearchService:
             movies_raw = self.provider_registry.get_movies_only(
                 sort_by="rating",
                 order="desc",
-                limit=limit * 2  # Fetch more to account for pagination
+                limit=MAX_TOTAL
             )
             tvshows_raw = self.provider_registry.get_tvshows_only(
                 sort_by="download_count",
                 order="desc",
-                limit=limit * 2
+                limit=MAX_TOTAL
             )
             try:
                 _cache.setex(
@@ -147,6 +148,59 @@ class SearchService:
             "provider": "local"
         })
         return result
+
+    def _enrich_results_from_db(self, results: list[dict]) -> None:
+        """Enrich results with one hash query and one title query per type."""
+        for content_type, service in (
+            ("movie", self.movie_service),
+            ("tv_show", self.tvshow_service),
+        ):
+            typed_results = [
+                result for result in results
+                if result.get("content_type") == content_type
+            ]
+            if not typed_results:
+                continue
+
+            hashes = [
+                torrent.get("hash")
+                for result in typed_results
+                for torrent in result.get("torrents", [])
+                if torrent.get("hash")
+            ]
+            videos_by_hash = {
+                video.selected_torrent_hash: video
+                for video in service.dao.get_by_torrent_hashes(hashes)
+            }
+            title_videos = service.dao.get_by_titles(
+                [result.get("title", "") for result in typed_results]
+            )
+
+            for result in typed_results:
+                video = next(
+                    (
+                        videos_by_hash[torrent["hash"]]
+                        for torrent in result.get("torrents", [])
+                        if torrent.get("hash") in videos_by_hash
+                    ),
+                    None,
+                )
+                if video is None:
+                    result_title = result.get("title", "").lower()
+                    video = next(
+                        (
+                            candidate for candidate in title_videos
+                            if result_title in candidate.title.lower()
+                        ),
+                        None,
+                    )
+                if video:
+                    self._enrich_with_db_data(result, video)
+                else:
+                    result.update({
+                        "downloaded": False,
+                        "download_status": "not_downloaded",
+                    })
     
     def _paginate_results(
         self,
@@ -182,6 +236,8 @@ class SearchService:
         """
         if not query or query.strip() == "":
             return self.get_popular(page, limit)
+        if len(query.strip()) < 2:
+            raise APIError(400, "Search query must contain at least 2 characters")
         LOGGER.info(f"SearchService: Search query='{query}' page={page} limit={limit}")
         fetch_limit: int = min(MAX_TOTAL, limit * 4)
         external_data: dict = self.provider_registry.search_all(
@@ -192,32 +248,24 @@ class SearchService:
             limit=fetch_limit
         )
         results: list[dict] = external_data["results"]
-        for result in results:
-            if video := self._find_video_in_db(result):
-                self._enrich_with_db_data(result, video)
-            else:
-                result.update({
-                    "downloaded": False,
-                    "download_status": "not_downloaded"
-                })
+        self._enrich_results_from_db(results)
         results.sort(
             key=lambda x: (
-                not x.get("downloaded", False),  # Downloaded first
-                x.get("title", "").lower()       # Then alphabetically by title
+                not x.get("downloaded", False),
+                x.get("title", "").lower()
             )
         )
         movies: list[dict] = [
-            r for r in results
-                if r.get("content_type") == "movie"
+            result for result in results
+            if result.get("content_type") == "movie"
         ]
         tv_shows: list[dict] = [
-            r for r in results
-                if r.get("content_type") == "tv_show"
+            result for result in results
+            if result.get("content_type") == "tv_show"
         ]
         return {
             "movies": self._paginate_results(movies, page, limit),
             "tv_shows": self._paginate_results(tv_shows, page, limit),
-            "page": page,
             "limit": limit,
             "query": query
         }

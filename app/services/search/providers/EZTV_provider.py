@@ -5,7 +5,7 @@ from app.core.configs import PROVIDERS_CONFIG as _p
 
 NAME: str = _p["eztv"]["name"]
 EZTV_CONTENT: str = _p["eztv"]["content"]
-MAX_PER_PAGE: int = _p["pagination"]["max_per_page"]
+MAX_RESULTS: int = _p["pagination"]["max_total_results"]
 TIMEOUT: int = int(_p["timeout"]["default"])
 GET_TORRENTS_URL: str = f"{_p['eztv']['base_url']}/{_p['eztv']['get_torrents']}"
 
@@ -21,7 +21,7 @@ class EZTVProvider(Provider):
     def get_popular(self) -> list[dict]:
         """Get popular TV shows from EZTV (recent torrents)"""
         torrents: list[dict] = self._fetch_eztv_torrents()
-        return torrents[:MAX_PER_PAGE]
+        return torrents[:MAX_RESULTS]
     
     def _fetch_eztv_torrents(self) -> list[dict]:
         """
@@ -33,7 +33,7 @@ class EZTVProvider(Provider):
             response: requests.Response = requests.get(
                 GET_TORRENTS_URL,
                 params={
-                    "limit": MAX_PER_PAGE,
+                    "limit": MAX_RESULTS,
                     "page": 0
                 },
                 timeout=TIMEOUT

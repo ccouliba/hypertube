@@ -65,12 +65,27 @@ class TorrentService:
             if torrent_hash:
                 existing = self.qb.torrents_info(torrent_hashes=torrent_hash)
                 if existing:
-                    LOGGER.info(f"TorrentService: Torrent already exists — hash: {torrent_hash}, skipping adding")
-                    return {
-                        "status": "started",
-                        "torrent_hash": torrent_hash,
-                        "save_path": DOWNLOAD_DIR
-                    }
+                    existing_state = str(existing[0].state).lower()
+                    if existing_state not in {"error", "missingfiles"}:
+                        LOGGER.info(
+                            "TorrentService: Torrent already exists — hash: %s, state: %s",
+                            torrent_hash,
+                            existing[0].state,
+                        )
+                        return {
+                            "status": "started",
+                            "torrent_hash": torrent_hash,
+                            "save_path": DOWNLOAD_DIR,
+                        }
+                    LOGGER.warning(
+                        "TorrentService: Removing failed torrent before retry — hash: %s, state: %s",
+                        torrent_hash,
+                        existing[0].state,
+                    )
+                    self.qb.torrents_delete(
+                        torrent_hashes=[torrent_hash],
+                        delete_files=False,
+                    )
             self.qb.torrents_add(
                 urls=torrent_url,
                 save_path=DOWNLOAD_DIR,
@@ -199,7 +214,10 @@ class TorrentService:
             True if successful, False otherwise
         """
         try:
-            self.qb.torrents_delete(torrent_hashes=[torrent_hash], delete_files=True)
+            self.qb.torrents_delete(
+                torrent_hashes=[torrent_hash],
+                delete_files=delete_files,
+            )
             LOGGER.info(f"TorrentService: Removed torrent {torrent_hash} (delete_files={delete_files})")
             return True
         except Exception as e:

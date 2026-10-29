@@ -32,8 +32,7 @@ def create_app(config_name: str = "dev") -> Flask:
     Returns:
         Flask app instance
     """
-    MIGRATIONS_DIR: str = os.path.join(os.path.dirname(__file__), "migrations")
-    # os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "migrations")
+    MIGRATIONS_DIR: str = os.path.join(os.path.dirname(__file__), "db", "migrations")
 
     def _validate_config(config: dict) -> None:
         """Validate that all required OpenAPI config keys are present"""
