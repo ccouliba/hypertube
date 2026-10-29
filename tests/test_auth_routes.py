@@ -81,16 +81,6 @@ class TestAuthRoutesLogin:
 
 class TestAuthRoutesGetUsers:
 
-    # def test_get_all_users_success(self, client, auth_headers):
-    #     response = client.get("/api/auth/users", headers=auth_headers)
-    #     assert response.status_code == 200
-    #     data = response.get_json()
-    #     assert "users" in data or isinstance(data, list)
-
-    # def test_get_all_users_without_auth(self, client):
-    #     response = client.get("/api/auth/users")
-    #     assert response.status_code == 401
-
     def test_get_user_by_id_success(self, client, test_user, auth_headers):
         response = client.get(f"/api/auth/users/{test_user.id}", headers=auth_headers)
         assert response.status_code == 200

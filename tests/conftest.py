@@ -129,7 +129,7 @@ def movie_data():
     return {
         "title": "Interstellar",
         "content_type": ContentType.MOVIE,
-        "tmdb_id": "157336",
+        "tmdb_id": 157336,
         "rating": 8.6,
         "year": 2014,
         "synopsis": "A hacker discovers the true nature of reality.",
@@ -148,7 +148,7 @@ def tvshow_data():
     return {
         "title": "Breaking Bad",
         "content_type": ContentType.TV_SHOW,
-        "tmdb_id": "1396",
+        "tmdb_id": 1396,
         "rating": 9.5,
         "year": 2008,
         "synopsis": "A chemistry teacher turns to cooking meth.",
@@ -226,7 +226,7 @@ def mock_qbittorrent(monkeypatch):
     mock_qb.auth_log_in.return_value = True
     mock_qb.app_version.return_value = "v4.5.0"
     mock_qb.torrents_add.return_value = True
-    mock_qb.torrents.return_value = []
+    mock_qb.torrents_info.return_value = []
     
     monkeypatch.setattr("app.services.torrent.service.Client", lambda **kwargs: mock_qb)
     return mock_qb
@@ -236,7 +236,11 @@ def mock_qbittorrent(monkeypatch):
 def mock_provider_registry(monkeypatch):
     """Mock provider registry for search"""
     mock_registry = MagicMock()
-    mock_registry.search.return_value = []
+    mock_registry.search_all.return_value = {
+        "results": [],
+        "total_results": 0,
+        "total_pages": 0,
+    }
     mock_registry.get_movies_only.return_value = []
     mock_registry.get_tvshows_only.return_value = []
     monkeypatch.setattr(
