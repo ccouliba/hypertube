@@ -7,7 +7,6 @@ import {
   resumeDownload as resumeDownloadThunk,
   deleteVideo as deleteVideoThunk,
   restoreDownload,
-  pollStatus,
 } from "@/store/slices/downloadSlice"
 import type { DownloadPayload } from "@/services/video.service"
 import type { VideoResult } from "@/types/search.types"
@@ -39,15 +38,6 @@ export const useDownload = (video: VideoResult) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hash, video.id])
-
-  useEffect(() => {
-    if (entry?.status !== "downloading" || !entry.videoId) return
-    const activeHash = entry.hash
-    const id = setInterval(() => {
-      dispatch(pollStatus({ contentType: entry.contentType, videoId: entry.videoId!, hash: activeHash }))
-    }, 3000)
-    return () => clearInterval(id)
-  }, [entry?.status, entry?.videoId, entry?.contentType, entry?.hash, dispatch])
 
   const startDownload = useCallback(() => {
     if (!bestTorrent?.hash || !bestTorrent?.url) return
